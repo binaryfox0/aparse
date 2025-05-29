@@ -30,6 +30,10 @@ struct aparse_arg_s
     int layout_size;
 };
 
+static inline aparse_arg aparse_arg_option(char* shortopt, char* longopt) {
+    return (aparse_arg){.shortopt = shortopt, .longopt = longopt, .is_argument = true};
+}
+
 static inline aparse_arg aparse_arg_number(char* name, void* dest, int size, bool have_sign) {
     return (aparse_arg){
         .longopt = name, .is_positional = true, .is_argument = true,
@@ -46,12 +50,16 @@ static inline aparse_arg aparse_arg_string(char* name, void* dest, int size, boo
 }
 
 #define __offsetofs(s, ...) { __expand(__map(offsetof, s, __VA_ARGS__)) }
-#define aparse_arg_subparser(name, subargs, handle, data_struct, ...) \
-    __aparse_arg_subparser(name, subargs, handle, (int[])__offsetofs(data_struct, __VA_ARGS__), __count_args(__VA_ARGS__))
-static inline aparse_arg __aparse_arg_subparser(char* name, aparse_arg* subargs, void (*handle)(void*), int* data_layout, int layout_size) {
+#define aparse_arg_subparser(name, subargs, handle, help, data_struct, ...) \
+    aparse_arg_subparser_impl(name, subargs, handle, help, (int[])__offsetofs(data_struct, __VA_ARGS__), __count_args(__VA_ARGS__))
+static inline aparse_arg aparse_arg_subparser_impl(
+    char* name,aparse_arg* subargs, void (*handle)(void*), 
+    char* help, int* data_layout, int layout_size
+) {
     return (aparse_arg) {
         .longopt = name, .subargs = subargs, .handler = handle,
-        .data_layout = data_layout, .layout_size = layout_size
+        .data_layout = data_layout, .layout_size = layout_size,
+        .help = help
     };
 }
 

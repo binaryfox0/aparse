@@ -5,25 +5,22 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+#include "aparse_list.h"
+
 #define APARSE_LITTLE_ENDIAN (*(unsigned char *)&(uint16_t){1})
 #define APARSE_ALLOC_SIZE 5
 
 #define min(a, b) ((a < b) ? (a) : (b))
-#define _strcmp(a, b) ((a) ? ((b) ? (!strcmp((a), (b))) : 0) : 0)
 
 typedef struct aparse_internal
 {
     int positional_count;
     int positional_processed;
-    struct {
-        char** data;
-        int size;
-        int index;
-    } unknown;
+    aparse_list unknown;
     bool is_sublayer;
 } aparse_internal;
 
-static inline bool aparse_arg_nend(aparse_arg* arg) {
+static inline bool aparse_arg_nend(const aparse_arg* arg) {
     return arg->longopt != 0 || arg->shortopt != 0;
 }
 
@@ -38,68 +35,90 @@ static inline int aparse_args_positional_count(aparse_arg* args)
 
 // Forward declaration
 int aparse_parse_private(const int argc, char** argv, aparse_arg* args, int* index, aparse_internal* internal);
+// The command handler for subparser will be called after the main parsing completed
+static aparse_list call_list;
+typedef struct call_struct {
+    aparse_arg* args;
+    void* data;
+} call_struct;
 // For aparse_arg have is_argument == true
 void aparse_process_argument(const char* argv, const aparse_arg* arg);
 void aparse_process_parser(const int argc, const char* cargv, char** argv, const aparse_arg* arg, int* index);
+void aparse_process_optional(const char* argv, const aparse_arg* arg);
 // For aparse_arg is subparsers and have proper data_layout & layout_size
 char* aparse_compose_data(const aparse_arg* args);
 void aparse_free_composed(char* data, aparse_arg* args);
 // Failure handling
-void aparse_add_unknown(const bool found, const char* program_name, aparse_internal* internal);
-int aparse_process_failure(const aparse_internal internal, const char* program_name, aparse_arg* args);
+int aparse_process_failure(const bool status, const aparse_internal internal, const char* program_name, aparse_arg* args);
 void aparse_required_message(const char* argv, aparse_arg* args);
 void aparse_unknown_message(const aparse_internal internal, const char* program_name);
 
 void aparse_parse(const int argc, char** argv, aparse_arg* args)
 {
     aparse_internal internal = { aparse_args_positional_count(args), 0, {0, 0, 0}};
+    aparse_list_new(&internal.unknown, 0, sizeof(char*));
+    aparse_list_new(&call_list, 0, sizeof(call_struct));
     int index = 1;
-    aparse_parse_private(argc, argv, args, &index, &internal);
-    if(aparse_process_failure(internal, argv[0], args))
+    if(aparse_process_failure(aparse_parse_private(argc, argv, args, &index, &internal) > 0, internal, argv[0], args)) {
+        aparse_list_free(&internal.unknown);
         exit(EXIT_FAILURE);
+    }
+    for(size_t i = 0; i < call_list.size; i++) {
+        call_struct* tmp = (call_struct*)aparse_list_get(&call_list, i);
+        tmp->args->handler(tmp->data);
+        aparse_free_composed(tmp->data, tmp->args->subargs);
+    }
+    aparse_list_free(&call_list);
+    aparse_list_free(&internal.unknown);
 }
 
 // --------------------------------------- PRIVATE ---------------------------------------
 int aparse_parse_private(const int argc, char** argv, aparse_arg* args, int* index, aparse_internal* internal)
 {
-    // Prevent out-of-bound process
-    if(*index >= argc) 
-        return -1;
-    int found = 0;
-    const char* cargv = argv[*index];
-    (*index)++;
-    for(aparse_arg* ptr = args; aparse_arg_nend(ptr); ptr++) {
-        if(ptr->is_positional)
-            found = !ptr->processed;
-        else
-            found = _strcmp(ptr->shortopt, cargv) || _strcmp(ptr->longopt, cargv);
-        if(found) {
-            if(ptr->is_positional) {
-                ptr->processed = 1;
-                internal->positional_processed++;
-                if(ptr->is_argument) {
-                    aparse_process_argument(cargv, ptr);
-                } else {
-                    aparse_process_parser(argc, cargv, argv, ptr, index);
-                }
+    while (*index < argc) {
+        int found = 0;
+        char* cargv = argv[*index];
+        (*index)++;
+
+        for (aparse_arg* ptr = args; aparse_arg_nend(ptr); ptr++) {
+            if (ptr->is_positional) {
+                found = !ptr->processed;
             } else {
-                fprintf(stderr, "aparse: error: sincerly applogized, we didn't add support for it yet.\n");
+                int len = strlen(cargv);
+                found = (ptr->shortopt && !strncmp(ptr->shortopt, cargv, len)) ||
+                        (ptr->longopt  && !strncmp(ptr->longopt,  cargv, len));
             }
-            break;
+
+            if (found) {
+                if (ptr->is_positional) {
+                    ptr->processed = 1;
+                    internal->positional_processed++;
+                    if (ptr->is_argument)
+                        aparse_process_argument(cargv, ptr);
+                    else
+                        aparse_process_parser(argc, cargv, argv, ptr, index);
+                } else
+                    aparse_process_optional(cargv, ptr);
+                break;
+            }
+        }
+
+        if (!found) {
+            if (aparse_list_add(&internal->unknown, cargv)) {
+                fprintf(stderr, "aparse: error: failed to allocate memory for parsing process. Retry again.\n");
+                return 1;
+            }
+
+            if (internal->is_sublayer) {
+                (*index)--; 
+                return -1;
+            }
         }
     }
-    aparse_add_unknown(found, cargv, internal);
 
-    // No more thing to process (at least for this layer), this for handling optional of the layer > 1
-    if(internal->is_sublayer && !found) {
-        *index -= 1;
-        return -1;
-    }
-
-    if(*index < argc)
-        aparse_parse_private(argc, argv, args, index, internal);
     return 0;
 }
+
 
 void aparse_process_argument(const char* argv, const aparse_arg *arg) {
     if (!arg->ptr) return;
@@ -140,7 +159,7 @@ void aparse_process_parser(const int argc, const char* cargv, char** argv, const
                 break;
         }
     if(!found2) {
-        fprintf(stderr, "%s: error: invalid choice: '%s' (choose from ", argv[0], argv);
+        fprintf(stderr, "%s: error: invalid choice: '%s' (choose from ", argv[0], cargv);
         for(aparse_arg* ptr2 = arg->subargs; aparse_arg_nend(ptr2); ptr2++) {
             fprintf(stderr, "%s%s", ptr2->longopt, aparse_arg_nend(ptr2 + 1) ? ", " : "");
         }
@@ -150,14 +169,21 @@ void aparse_process_parser(const int argc, const char* cargv, char** argv, const
     // Found it!, compose struct for it to handler process.
     char* data = aparse_compose_data(ptr2);
     aparse_internal internal2 = { aparse_args_positional_count(ptr2->subargs), 0, {0}, 1};
-    aparse_parse_private(argc, argv, ptr2->subargs, index, &internal2);
-    if(aparse_process_failure(internal2, argv[0], ptr2->subargs)) {
+    aparse_list_new(&internal2.unknown, 0, sizeof(char*));
+    if(aparse_process_failure(aparse_parse_private(argc, argv, ptr2->subargs, index, &internal2) > 0, internal2, argv[0], ptr2->subargs)) {
         aparse_free_composed(data, ptr2->subargs);
+        aparse_list_free(&internal2.unknown);
         exit(EXIT_FAILURE);
     }
-    if(ptr2->handler)
-        ptr2->handler(data);
-    aparse_free_composed(data, ptr2->subargs);            
+    if(!ptr2->handler)
+        aparse_free_composed(data, ptr2->subargs);
+    else
+        aparse_list_add(&call_list, (call_struct[1]){{ptr2, data}});
+    aparse_list_free(&internal2.unknown);
+}
+
+void aparse_process_optional(const char* argv, const aparse_arg* arg){
+    
 }
 
 // Use to create a bytes-like structure to hold data before parsing then pass into handler
@@ -210,34 +236,19 @@ void aparse_free_composed(char* data, aparse_arg* args)
     free(data);
 }
 
-void aparse_add_unknown(const bool found, const char* argv, aparse_internal* internal)
-{
-    for(int i = 0; i < 1 && !found; i++) {
-        // Trigger allocation
-        if(internal->unknown.index >= internal->unknown.size)
-        {
-            char** tmp = realloc(internal->unknown.data, sizeof(char*) * (internal->unknown.size + APARSE_ALLOC_SIZE));
-            if(!tmp) break;
-            internal->unknown.data = tmp;
-            internal->unknown.size += APARSE_ALLOC_SIZE;
-        }
-        int size = strlen(argv) + 1;
-        if(!(internal->unknown.data[internal->unknown.index] = malloc(size)))
-            break;
-        memcpy(internal->unknown.data[internal->unknown.index], argv, size);
-        internal->unknown.index++;
-    }
-}
-
 // 0 no error, 1 error (just for cleaning up)
-int aparse_process_failure(const aparse_internal internal, const char* program_name, aparse_arg* args)
+int aparse_process_failure(const bool status, const aparse_internal internal, const char* program_name, aparse_arg* args)
 {
     int error = 0;
-    if (internal.positional_count != internal.positional_processed) {
+    if(status > 0) {
+        fprintf(stderr, "aparse: error: failed to allocate resources for parsing process. Retry again.\n");
+        error = 1;
+    }
+    else if (internal.positional_count != internal.positional_processed) {
         aparse_required_message(program_name, args);
         error = 1;
     }
-    if (internal.unknown.size > 0) {
+    else if (internal.unknown.size > 0 && !internal.is_sublayer) {
         aparse_unknown_message(internal, program_name);
         error = 1;
     }
@@ -266,14 +277,12 @@ void aparse_unknown_message(const aparse_internal internal, const char* program_
 {
     fprintf(stderr, "%s: error: unrecognized arguments: ", program_name);
     int printed = 0;
-    for (int i = 0; i < internal.unknown.index; i++) {
+    for (int i = 0; i < internal.unknown.size; i++) {
         if (printed > 0)
             fprintf(stderr, ", ");
-        fprintf(stderr, "%s", internal.unknown.data[i]);
-        free(internal.unknown.data[i]);
+        fprintf(stderr, "%s", (char*)aparse_list_get(&internal.unknown, i));
         printed++;
     }
     fprintf(stderr, "\n");
     // Cleanup
-    free(internal.unknown.data);
 }
