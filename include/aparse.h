@@ -2,6 +2,7 @@
 #define APARSE_H
 
 #include <stdbool.h>
+#include <stdint.h>
 
 #include "aparse_black_magic.h"
 
@@ -14,24 +15,37 @@ struct aparse_arg_s
     bool is_positional; // otherwise optional
     bool is_argument; // otherwise parser
     // For positional
-    int processed;
+    uint8_t flags;
     // For argument //
-    void* ptr;
-    bool is_number;
-    int size;
-    // For integer
-    bool have_sign;
-    // For string
-    bool auto_allocation;
-    // For parser
-    aparse_arg* subargs;
-    void (*handler)(void* data);
-    int* data_layout;
-    int layout_size;
+    union {
+        struct {
+            void* ptr;
+            bool is_number;
+            int size;
+            // For integer
+            bool have_sign;
+            // For string
+            bool auto_allocation;
+            bool allocated;
+        };
+        // For subparsers/subcommands
+        struct {
+            aparse_arg* subargs;
+            void (*handler)(void* data);
+            int* data_layout;
+            int layout_size;
+        };
+    };
+    // For optional
+    bool negatable;
 };
 
-static inline aparse_arg aparse_arg_option(char* shortopt, char* longopt) {
-    return (aparse_arg){.shortopt = shortopt, .longopt = longopt, .is_argument = true};
+static inline aparse_arg aparse_arg_option(char* shortopt, char* longopt, void* dest, int size, bool is_number, bool have_sign) {
+    return (aparse_arg){
+        .shortopt = shortopt, .longopt = longopt, .is_argument = true,
+        .is_number = is_number, .ptr = dest, .size = size,
+        .have_sign = have_sign
+    };
 }
 
 static inline aparse_arg aparse_arg_number(char* name, void* dest, int size, bool have_sign) {
