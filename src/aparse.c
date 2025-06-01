@@ -253,7 +253,7 @@ void aparse_process_parser(const int argc, const char* cargv, char** argv, const
         aparse_list_free(&internal2.unknown);
         exit(failure);
     }
-    if(!ptr2->handler)
+    if(!ptr2->handler || !data)
         aparse_free_composed(data, ptr2->subargs);
     else
         aparse_list_add(&call_list, (call_struct[1]){{ptr2, data}});
@@ -289,6 +289,7 @@ char* aparse_compose_data(const aparse_arg* args)
             continue;
         index += real->auto_allocation ? sizeof(void*) : real->size;
     }
+    if(!index) return 0;
     char* buffer = (char*)malloc(index);
     if(!buffer) return 0;
     memset(buffer, 0, index);
@@ -319,6 +320,7 @@ void aparse_free_composed(char* data, aparse_arg* args)
         if(real->auto_allocation && real->flags & BITMASK_0 && real->allocated) {
             char** dst = (char**)(real->ptr);
             free(*dst);
+            real->allocated = false;
         }
     }
     free(data);
