@@ -5,7 +5,6 @@
 #include <stddef.h>
 
 #include "aparse.h"
-#include "../src/aparse_list.h"
 
 typedef struct install_struct {
     char* file;
@@ -44,14 +43,14 @@ int main(int argc, char** argv)
         aparse_arg_end_marker
     };
     aparse_arg main_args[] = {
+        aparse_arg_number("number2", &number, 4, 1),
+        aparse_arg_number("number3", &number, 4, 1),
         aparse_arg_parser("command", command),
         aparse_arg_number("number", &number, 4, 1),
         aparse_arg_option("-o", "--output", &number, 4, true, true),
         aparse_arg_end_marker
     };
     aparse_parse(argc, argv, main_args);
-    // aparse_construct_help(main_args);
-    // aparse_construct_usage(install);
-    printf("%d\n", number);
+    // printf("%d\n", number);
     return 0;
 }
