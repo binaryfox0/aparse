@@ -111,7 +111,6 @@ void aparse_process_parser(const int argc, const char* cargv, char** argv, const
 bool aparse_process_optional(int argc, char** argv, int* index, const aparse_arg* arg);
 // For aparse_arg is subparsers and have proper data_layout & layout_size
 char* aparse_compose_data(const aparse_arg* args);
-void aparse_free_composed(char* data, aparse_arg* args);
 // Failure handling
 int aparse_process_failure(const bool status, const aparse_internal internal, aparse_arg* args);
 void aparse_required_message(aparse_arg* args);
@@ -143,7 +142,7 @@ void aparse_parse(const int argc, char** argv, aparse_arg* args, const char* pro
     for(size_t i = 0; i < call_list.size; i++) {
         call_struct* tmp = (call_struct*)aparse_list_get(&call_list, i);
         tmp->args->handler(tmp->data);
-        aparse_free_composed(tmp->data, tmp->args->subargs);
+        free(tmp->data);
     }
     aparse_list_free(&call_list);
     aparse_list_free(&internal.unknown);
@@ -201,6 +200,9 @@ bool aparse_process_argument(char* argv, const aparse_arg *arg) {
     if (!arg->ptr) return true;
 
     if (arg->is_number) {
+        if(arg->size == 0) {
+            return false;
+        }
         if(!is_valid_number(argv, arg->have_sign)) {
             fprintf(stderr, "%s: error: invalid number '%s'\n", progname, argv);
             return false;
@@ -216,15 +218,15 @@ bool aparse_process_argument(char* argv, const aparse_arg *arg) {
     } else {
         size_t len = strlen(argv) + 1;
 
-        if (arg->auto_allocation) {
+        if (arg->size == 0) { // dynamic
             char** dst = (char**)arg->ptr;
-            char* tmp = realloc(*dst, len);
-            if (!tmp) {
-                fprintf(stderr, "%s: error: failure to allocate memory for parsing procedure. Retry again.\n", progname);
-                return false;
-            }
-            *dst = tmp;
-            memcpy(*dst, argv, len);
+            // char* tmp = realloc(*dst, len);
+            // if (!tmp) {
+            //     fprintf(stderr, "%s: error: failure to allocate memory for parsing procedure. Retry again.\n", progname);
+            //     return false;
+            // }
+            // *dst = tmp;
+            *dst = argv;
         } else {
             size_t n = min(arg->size - 1, len);
             memcpy(arg->ptr, argv, n);
@@ -257,12 +259,12 @@ void aparse_process_parser(const int argc, const char* cargv, char** argv, const
     aparse_internal internal2 = { aparse_args_positional_count(ptr2->subargs), 0, {0}, 1};
     aparse_list_new(&internal2.unknown, 0, sizeof(char*));
     if(aparse_process_failure(aparse_parse_private(argc, argv, ptr2->subargs, index, &internal2) > 0, internal2, ptr2->subargs)) {
-        aparse_free_composed(data, ptr2->subargs);
+        free(data);
         aparse_list_free(&internal2.unknown);
         exit(failure);
     }
     if(!ptr2->handler || !data)
-        aparse_free_composed(data, ptr2->subargs);
+        free(data);
     else
         aparse_list_add(&call_list, (call_struct[1]){{ptr2, data}});
     aparse_list_free(&internal2.unknown);
@@ -298,64 +300,61 @@ char* aparse_compose_data(const aparse_arg* args)
 {
     if(!args->subargs || !args->handler)
         return 0;
-    aparse_arg* real = args->subargs;
+    //aparse_arg* real = args->subargs;
     //Query size
-    int index = 0, count = 0;
-    for(; aparse_arg_nend(real); real++)
-    {
-        if(count == args->layout_size)
-            break;
-        if(!real->is_argument || !real->is_positional)
-            continue;
-        index += real->auto_allocation ? sizeof(void*) : real->size;
-    }
-    if(!index) return 0;
-    char* buffer = (char*)malloc(index);
-    if(!buffer) return 0;
-    memset(buffer, 0, index);
+    //int index = 0, count = 0;
+    //for(; aparse_arg_nend(real); real++)
+    //{
+    //    if(count == args->layout_size)
+    //        break;
+    //    if(!real->is_argument || !real->is_positional)
+    //        continue;
+    //    index += real->auto_allocation ? sizeof(void*) : real->size;
+    //}
+    // if(!index) return 0;
+    // char* buffer = (char*)malloc(index);
+    // if(!buffer) return 0;
+    // memset(buffer, 0, index);
     //Determine the maximum size it can have
-    count = 0;
-    index = 0;
-    real = args->subargs;
-    for(; aparse_arg_nend(real); real++)
+    // count = 0;
+    // index = 0;
+    // real = args->subargs;
+    // for(; aparse_arg_nend(real); real++)
+    // {
+    //     if(count == args->layout_size)
+    //         break;
+    //     if(!real->is_argument || !real->is_positional)
+    //         continue;
+    //     // Obviously that is_number only have two state: true/false so dont need if
+    //     real->ptr = &buffer[index];
+    //     real->allocated = true;
+    //     index += real->auto_allocation ? sizeof(void*) : real->size;
+    //     count++;
+    // }
+    // return buffer;
+    if(args->layout_size < 1) return 0;
+    size_t size = args->data_layout[(args->layout_size - 1) * 2 + 0] + args->data_layout[(args->layout_size - 1) * 2 + 1];
+    char* buffer = malloc(size);
+    if(!buffer) return 0;
+    memset(buffer, 0, size);
+    aparse_arg* real = args->subargs;
+    int count = 0;
+    for(int i = 0; i < args->layout_size && aparse_arg_nend(real); i++, real++)
     {
-        if(count == args->layout_size)
-            break;
         if(!real->is_argument || !real->is_positional)
             continue;
-        // Obviously that is_number only have two state: true/false so dont need if
-        real->ptr = &buffer[index];
-        real->allocated = true;
-        index += real->auto_allocation ? sizeof(void*) : real->size;
+        int base = i * 2;
+        real->ptr = &buffer[args->data_layout[base]];
         count++;
+        if(real->size == 0 && !real->is_number)
+            continue;
+        real->size = args->data_layout[base + 1];
+    }
+    if(!count) {
+        free(buffer);
+        return 0;
     }
     return buffer;
-    //size_t size = args->data_layout[(args->layout_size - 1) * 2 + 1];
-    //char* buffer = malloc(size);
-    //if(!buffer) return 0;
-    //memset(buffer, 0, size);
-    //aparse_arg* real = args->subargs;
-    //for(int i = 0; i < args->layout_size && aparse_arg_nend(real); i++, real++)
-    //{
-    //    int base = i * 2;
-    //    real->ptr = &buffer[args->data_layout[base]];
-    //    real->size = args->data_layout[base + 1];
-    //}
-    //return buffer;
-}
-
-void aparse_free_composed(char* data, aparse_arg* args)
-{
-    if(!args)
-        return;
-    for(aparse_arg* real = args; aparse_arg_nend(real); real++) {
-        if(real->auto_allocation && real->flags & BITMASK_0 && real->allocated) {
-            char** dst = (char**)(real->ptr);
-            free(*dst);
-            real->allocated = false;
-        }
-    }
-    free(data);
 }
 
 // 0 no error, 1 error (just for cleaning up)
