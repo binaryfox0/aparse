@@ -22,35 +22,38 @@ int main(int argc, char** argv)
     int number = 0;
 
     aparse_arg subinstall[] = {
-        aparse_arg_string("file", 0, 0, 1),
-        aparse_arg_string("dest", 0, 0, 1),
+        aparse_arg_string("file", 0, 0, 1, "Source"),
+        aparse_arg_string("dest", 0, 0, 1, "Destination"),
         // aparse_arg_option("-o", "--output", &number, 4, true, true),
 
+        aparse_arg_end_marker
+    };
+    aparse_arg subcommands[]=
+    {
+        aparse_arg_subparser("file", subinstall, install_command, "", install_struct, file, dest),
         aparse_arg_end_marker
     };
     aparse_arg install[] = {
         // aparse_arg_string("file", 0, 0, 1),
         // aparse_arg_string("dest", 0, 0, 1),
-        aparse_arg_parser("command2", (aparse_arg[]){
-            aparse_arg_subparser("file", subinstall, install_command, "", install_struct, file, dest),
-            aparse_arg_end_marker
-        }),
+        aparse_arg_parser("command2", subcommands),
         aparse_arg_end_marker
     };
     aparse_arg command[] = {
          aparse_arg_subparser("install", install, install_command, "Install package", install_struct, file, dest),
+         
         //aparse_arg_subparser_impl("install", install, 0, "", 0, 0),
         aparse_arg_end_marker
     };
     aparse_arg main_args[] = {
-        aparse_arg_number("number2", &number, 4, 1),
-        aparse_arg_number("number3", &number, 4, 1),
+        aparse_arg_number("number2", &number, 4, 1, "2nd number"),
+        aparse_arg_number("number3", &number, 4, 1, "1st number"),
         aparse_arg_parser("command", command),
-        aparse_arg_number("number", &number, 4, 1),
-        aparse_arg_option("-o", "--output", &number, 4, true, true),
+        aparse_arg_number("number", &number, 4, 1, "0th number"),
+        aparse_arg_option("-o", "--output", &number, 4, true, true, false),
         aparse_arg_end_marker
     };
-    aparse_parse(argc, argv, main_args);
+    aparse_parse(argc, argv, main_args, "Just an example");
     // printf("%d\n", number);
     return 0;
 }

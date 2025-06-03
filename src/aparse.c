@@ -91,9 +91,10 @@ static inline int aparse_args_positional_count(aparse_arg* args)
     return count;
 }
 
-static aparse_arg* main_args = 0;
-static char* progname = 0;
-static aparse_arg help_arg = { .shortopt = "-h", .longopt = "--help", .help = "show this help message and exit" };
+static aparse_arg* root_args = 0, *current_args = 0;
+static const char* progname = 0;
+static const char *prog_desc = 0;
+static aparse_arg help_arg = { .shortopt = "-h", .longopt = "--help", .help = "show this help message and exit", .negatable = true };
 static bool failure = 1; // only for help message
 
 // Forward declaration
@@ -120,14 +121,17 @@ void aparse_print_help(aparse_arg* main_args);
 void aparse_print_help_tag(const aparse_arg* arg, int indent);
 void aparse_print_positional_help(aparse_arg* args);
 char* aparse_construct_available_subcommands(const aparse_arg* args);
-void aparse_print_usage(aparse_arg* args);
+void aparse_print_usage();
 // Miscellaneous
 aparse_arg* aparse_argv_matching(const char* argv, aparse_arg* args);
+const char* aparse_extract_exename(const char* argv0);
+char* aparse_construct_optional_argument(char* longopt);
 
-void aparse_parse(const int argc, char** argv, aparse_arg* args)
+void aparse_parse(const int argc, char** argv, aparse_arg* args, const char* program_desc)
 {
-    progname = argv[0];
-    main_args = args;
+    progname = aparse_extract_exename(argv[0]);
+    prog_desc = program_desc;
+    root_args = args;
     aparse_internal internal = { aparse_args_positional_count(args), 0, {0, 0, 0}};
     aparse_list_new(&internal.unknown, 0, sizeof(char*));
     aparse_list_new(&call_list, 0, sizeof(call_struct));
@@ -148,6 +152,7 @@ void aparse_parse(const int argc, char** argv, aparse_arg* args)
 // --------------------------------------- PRIVATE ---------------------------------------
 int aparse_parse_private(const int argc, char** argv, aparse_arg* args, int* index, aparse_internal* internal)
 {
+    current_args = args;
     while (*index < argc) {
         int found = 0;
         char* cargv = argv[*index];
@@ -161,8 +166,10 @@ int aparse_parse_private(const int argc, char** argv, aparse_arg* args, int* ind
                 if(ptr->is_argument) {
                     if(!aparse_process_argument(cargv, ptr))
                         return 1;
-                } else 
+                } else  {
                     aparse_process_parser(argc, cargv, argv, ptr, index);
+                    current_args = args; // reset it
+                }
             } else {
                 if(ptr->shortopt != help_arg.shortopt) {
                     if(!aparse_process_optional(argc, argv, index, ptr))
@@ -203,7 +210,7 @@ bool aparse_process_argument(char* argv, const aparse_arg *arg) {
 
         // Directly manipulating the sign bit (MSB)
         if (arg->have_sign) {
-            uint8_t* b = (uint8_t*)arg->ptr + (APARSE_LITTLE_ENDIAN ? 3 : 0);
+            uint8_t* b = (uint8_t*)arg->ptr + (APARSE_LITTLE_ENDIAN ? arg->size - 1 : 0);
             *b = (*b & ~0x80) | (((int64_t)num < 0) ? 0x80 : 0);
         }
     } else {
@@ -237,6 +244,7 @@ void aparse_process_parser(const int argc, const char* cargv, char** argv, const
                 break;
         }
     if(!found2) {
+        aparse_print_usage(current_args);
         fprintf(stderr, "%s: error: invalid choice: '%s' (choose from ", progname, cargv);
         for(aparse_arg* ptr2 = arg->subargs; aparse_arg_nend(ptr2); ptr2++) {
             fprintf(stderr, "%s%s", ptr2->longopt, aparse_arg_nend(ptr2 + 1) ? ", " : "");
@@ -261,8 +269,20 @@ void aparse_process_parser(const int argc, const char* cargv, char** argv, const
 }
 
 bool aparse_process_optional(int argc, char** argv, int* index, const aparse_arg* arg){
-    if(arg->flags & BITMASK_0)
-        return aparse_process_argument(argv[*index - 1] + 1 + strlen(arg->flags & BITMASK_1 ? arg->shortopt : arg->longopt), arg);
+    if(arg->flags & BITMASK_0) {
+        if(arg->negatable)
+        {
+            bool was_set = false;
+            for(int i = 0; i < arg->size; i++)
+                if(((char*)arg->ptr)[i])
+                    was_set = true;
+            memset(arg->ptr, 0, arg->size);
+            uint8_t* b = (uint8_t*)arg->ptr + (APARSE_LITTLE_ENDIAN ? arg->size - 1 : 0);
+            if(!was_set) *b |= 1;
+        }
+        else
+            return aparse_process_argument(argv[*index - 1] + 1 + strlen(arg->flags & BITMASK_1 ? arg->shortopt : arg->longopt), arg);
+    }
     else {
         if(*index >= argc) {
             printf("%s: error: option '%s' expected 1 argument.\n", progname, arg->flags & BITMASK_1 ? arg->shortopt : arg->longopt);
@@ -279,7 +299,7 @@ char* aparse_compose_data(const aparse_arg* args)
     if(!args->subargs || !args->handler)
         return 0;
     aparse_arg* real = args->subargs;
-    // Query size
+    //Query size
     int index = 0, count = 0;
     for(; aparse_arg_nend(real); real++)
     {
@@ -293,7 +313,7 @@ char* aparse_compose_data(const aparse_arg* args)
     char* buffer = (char*)malloc(index);
     if(!buffer) return 0;
     memset(buffer, 0, index);
-    // Determine the maximum size it can have
+    //Determine the maximum size it can have
     count = 0;
     index = 0;
     real = args->subargs;
@@ -310,6 +330,18 @@ char* aparse_compose_data(const aparse_arg* args)
         count++;
     }
     return buffer;
+    //size_t size = args->data_layout[(args->layout_size - 1) * 2 + 1];
+    //char* buffer = malloc(size);
+    //if(!buffer) return 0;
+    //memset(buffer, 0, size);
+    //aparse_arg* real = args->subargs;
+    //for(int i = 0; i < args->layout_size && aparse_arg_nend(real); i++, real++)
+    //{
+    //    int base = i * 2;
+    //    real->ptr = &buffer[args->data_layout[base]];
+    //    real->size = args->data_layout[base + 1];
+    //}
+    //return buffer;
 }
 
 void aparse_free_composed(char* data, aparse_arg* args)
@@ -331,6 +363,7 @@ int aparse_process_failure(const bool status, const aparse_internal internal, ap
     if (status > 0) return 1;
 
     if (internal.positional_count != internal.positional_processed) {
+        aparse_print_usage();
         aparse_required_message(args);
         return 1;
     }
@@ -365,8 +398,10 @@ void aparse_unknown_message(const aparse_internal internal) {
 }
 
 void aparse_print_help(aparse_arg* main_args) {
-    aparse_print_usage(main_args);
+    aparse_print_usage();
     printf("\n");
+    if(root_args == current_args)
+        printf("%s\n\n", prog_desc);
     printf("positional arguments:\n");
     aparse_print_positional_help(main_args);
     printf("\noptions:\n");
@@ -386,6 +421,11 @@ void aparse_print_help_tag(const aparse_arg* arg, int indent) {
         arg->shortopt ? ", " : "",
         arg->longopt  ? arg->longopt  : ""
     ) - INDENT;
+    if(!arg->is_positional && !arg->negatable) {
+        char* optional_arg = aparse_construct_optional_argument(arg->longopt ? arg->longopt : arg->shortopt);
+        printf(" %s", optional_arg);
+        free(optional_arg);
+    }
     bool longer = len > MAX_ARG_STR;
     if(arg->help) {
         int space = INDENT + (longer ? INDENT + MAX_ARG_STR : MAX_ARG_STR - len);
@@ -501,34 +541,60 @@ void aparse_print_usage_before(aparse_arg* root, aparse_arg* target) {
     aparse_list_free(&strs);
 }
 
-void aparse_print_usage_after(aparse_arg* args) {
+// void aparse_print_usage_after(aparse_arg* args) {
+    // aparse_list list;
+    // aparse_list_new(&list, 0, sizeof(aparse_arg*));
+    // for(aparse_arg* real = args; aparse_arg_nend(real); real++) {
+        // if(real->is_positional) {
+            // if(!real->is_argument) {
+                // char* buf = aparse_construct_available_subcommands(real);
+                // printf("%s ... ", buf);
+                // if(buf) free(buf);
+            // } else {
+                // printf("%s ", real->longopt);
+            // }
+        // } else {
+            // aparse_list_add(&list, real);
+        // }
+    // }
+    // for(size_t i = 0; i < list.size; i++) {
+        // aparse_arg* entry = aparse_list_get(&list, i);
+        // printf("[%s] ", entry->shortopt ? entry->shortopt : entry->longopt);
+    // }
+    // aparse_list_free(&list);
+    // printf("\n");
+// }
+
+void aparse_print_usage_after(aparse_arg* args)
+{
     aparse_list list;
     aparse_list_new(&list, 0, sizeof(aparse_arg*));
-    for(aparse_arg* real = args; aparse_arg_nend(real); real++) {
-        if(real->is_positional) {
-            if(!real->is_argument) {
-                char* buf = aparse_construct_available_subcommands(real);
-                printf("%s ... ", buf);
-                if(buf) free(buf);
-            } else {
-                printf("%s ", real->longopt);
-            }
-        } else {
-            aparse_list_add(&list, real);
-        }
+    for(aparse_arg* real = args; aparse_arg_nend(real); real++)
+    {
+        if(real->is_positional)
+            aparse_list_add(&list, &real);
+        else
+            printf("[%s] ", real->shortopt ? real->shortopt : real->longopt);
     }
-    for(size_t i = 0; i < list.size; i++) {
-        aparse_arg* entry = aparse_list_get(&list, i);
-        printf("[%s] ", entry->shortopt ? entry->shortopt : entry->longopt);
+    for(size_t i = 0; i < list.size; i++)
+    {
+        aparse_arg* entry = *(aparse_arg**)aparse_list_get(&list, i);
+        if(entry->is_argument)
+            printf("%s ", entry->longopt);
+        else {
+            char* buf = aparse_construct_available_subcommands(entry);
+            printf("%s ... ", buf);
+            if(buf) free(buf);
+        }
     }
     aparse_list_free(&list);
     printf("\n");
 }
 
-void aparse_print_usage(aparse_arg* args) {
+void aparse_print_usage() {
     printf("usage: %s ", progname);
-    aparse_print_usage_before(main_args, args);
-    aparse_print_usage_after(args);
+    aparse_print_usage_before(root_args, current_args);
+    aparse_print_usage_after(current_args);
 }
 
 aparse_arg* aparse_argv_matching(const char* argv, aparse_arg* args)
@@ -568,4 +634,30 @@ aparse_arg* aparse_argv_matching(const char* argv, aparse_arg* args)
         }
     }
     return NULL;
+}
+
+const char* aparse_extract_exename(const char* argv0)
+{
+    const char* last_slash = strrchr(argv0, '/');  // POSIX (Linux, macOS)
+#ifdef _WIN32
+    const char* last_backslash = strrchr(argv0, '\\');  // Windows
+    if (!last_slash || (last_backslash && last_backslash > last_slash)) {
+        last_slash = last_backslash;
+    }
+#endif
+    return last_slash ? last_slash + 1 : argv0;
+}
+
+char* aparse_construct_optional_argument(char* longopt)
+{
+    if(!longopt)
+        return 0;
+    for(; *longopt != '\0' && *longopt == '-'; longopt++) {}
+    char* out, *ptr;
+    out = ptr = malloc(strlen(longopt) + 1);
+    if(!out) return 0;
+    for(; *longopt != '\0'; longopt++, ptr++)
+        *ptr = toupper(*longopt);
+    *ptr = '\0';
+    return out;
 }
