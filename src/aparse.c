@@ -390,7 +390,7 @@ void aparse_print_help_tag(const aparse_arg* arg, int indent) {
         arg->shortopt ? ", " : "",
         arg->longopt  ? arg->longopt  : ""
     ) - INDENT;
-    if(!arg->is_positional && arg->negatable) {
+    if(!arg->is_positional && !arg->negatable) {
         char* optional_arg = aparse_construct_optional_argument(arg->longopt ? arg->longopt : arg->shortopt);
         len += printf(" %s", optional_arg);
         free(optional_arg);
@@ -518,8 +518,16 @@ void aparse_print_usage_after(aparse_arg* args)
     {
         if(real->is_positional)
             aparse_list_add(&list, &real);
-        else
-            printf("[%s] ", real->shortopt ? real->shortopt : real->longopt);
+        else {
+            printf("[%s", real->shortopt ? real->shortopt : real->longopt);
+            if(!real->negatable)
+            {
+                char* optional_arg = aparse_construct_optional_argument(real->longopt ? real->longopt : real->shortopt);
+                printf("%s", optional_arg);
+                free(optional_arg);
+            }
+            printf("] ");
+        }
     }
     for(size_t i = 0; i < list.size; i++)
     {
