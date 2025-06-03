@@ -271,19 +271,20 @@ void aparse_process_parser(const int argc, const char* cargv, char** argv, const
 }
 
 bool aparse_process_optional(int argc, char** argv, int* index, const aparse_arg* arg){
+    if(arg->negatable)
+    {
+        bool was_set = false;
+        for(int i = 0; i < arg->size; i++)
+            if(((char*)arg->ptr)[i])
+                was_set = true;
+        memset(arg->ptr, 0, arg->size);
+        uint8_t* b = (uint8_t*)arg->ptr + (APARSE_LITTLE_ENDIAN ? arg->size - 1 : 0);
+        if(!was_set) *b |= 1;
+        return true;
+    }
+    // if has equal
     if(arg->flags & BITMASK_0) {
-        if(arg->negatable)
-        {
-            bool was_set = false;
-            for(int i = 0; i < arg->size; i++)
-                if(((char*)arg->ptr)[i])
-                    was_set = true;
-            memset(arg->ptr, 0, arg->size);
-            uint8_t* b = (uint8_t*)arg->ptr + (APARSE_LITTLE_ENDIAN ? arg->size - 1 : 0);
-            if(!was_set) *b |= 1;
-        }
-        else
-            return aparse_process_argument(argv[*index - 1] + 1 + strlen(arg->flags & BITMASK_1 ? arg->shortopt : arg->longopt), arg);
+        return aparse_process_argument(argv[*index - 1] + 1 + strlen(arg->flags & BITMASK_1 ? arg->shortopt : arg->longopt), arg);
     }
     else {
         if(*index >= argc) {
@@ -300,38 +301,7 @@ char* aparse_compose_data(const aparse_arg* args)
 {
     if(!args->subargs || !args->handler)
         return 0;
-    //aparse_arg* real = args->subargs;
-    //Query size
-    //int index = 0, count = 0;
-    //for(; aparse_arg_nend(real); real++)
-    //{
-    //    if(count == args->layout_size)
-    //        break;
-    //    if(!real->is_argument || !real->is_positional)
-    //        continue;
-    //    index += real->auto_allocation ? sizeof(void*) : real->size;
-    //}
-    // if(!index) return 0;
-    // char* buffer = (char*)malloc(index);
-    // if(!buffer) return 0;
-    // memset(buffer, 0, index);
-    //Determine the maximum size it can have
-    // count = 0;
-    // index = 0;
-    // real = args->subargs;
-    // for(; aparse_arg_nend(real); real++)
-    // {
-    //     if(count == args->layout_size)
-    //         break;
-    //     if(!real->is_argument || !real->is_positional)
-    //         continue;
-    //     // Obviously that is_number only have two state: true/false so dont need if
-    //     real->ptr = &buffer[index];
-    //     real->allocated = true;
-    //     index += real->auto_allocation ? sizeof(void*) : real->size;
-    //     count++;
-    // }
-    // return buffer;
+
     if(args->layout_size < 1) return 0;
     size_t size = args->data_layout[(args->layout_size - 1) * 2 + 0] + args->data_layout[(args->layout_size - 1) * 2 + 1];
     char* buffer = malloc(size);
@@ -540,30 +510,6 @@ void aparse_print_usage_before(aparse_arg* root, aparse_arg* target) {
     aparse_list_free(&strs);
 }
 
-// void aparse_print_usage_after(aparse_arg* args) {
-    // aparse_list list;
-    // aparse_list_new(&list, 0, sizeof(aparse_arg*));
-    // for(aparse_arg* real = args; aparse_arg_nend(real); real++) {
-        // if(real->is_positional) {
-            // if(!real->is_argument) {
-                // char* buf = aparse_construct_available_subcommands(real);
-                // printf("%s ... ", buf);
-                // if(buf) free(buf);
-            // } else {
-                // printf("%s ", real->longopt);
-            // }
-        // } else {
-            // aparse_list_add(&list, real);
-        // }
-    // }
-    // for(size_t i = 0; i < list.size; i++) {
-        // aparse_arg* entry = aparse_list_get(&list, i);
-        // printf("[%s] ", entry->shortopt ? entry->shortopt : entry->longopt);
-    // }
-    // aparse_list_free(&list);
-    // printf("\n");
-// }
-
 void aparse_print_usage_after(aparse_arg* args)
 {
     aparse_list list;
@@ -601,10 +547,12 @@ aparse_arg* aparse_argv_matching(const char* argv, aparse_arg* args)
     if(!strcmp(argv, help_arg.shortopt) || !strcmp(argv, help_arg.longopt)) {
         return &help_arg;
     }
+    aparse_arg* positional = 0;
     for (aparse_arg* real = args; aparse_arg_nend(real); real++) {
         if (real->is_positional) {
             if (!real->flags & BITMASK_0)
-                return real;
+                if(!positional)
+                    positional = real;
             continue;
         }
         if (real->shortopt) {
@@ -632,7 +580,7 @@ aparse_arg* aparse_argv_matching(const char* argv, aparse_arg* args)
             }
         }
     }
-    return NULL;
+    return positional;
 }
 
 const char* aparse_extract_exename(const char* argv0)
