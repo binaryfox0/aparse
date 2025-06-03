@@ -390,9 +390,9 @@ void aparse_print_help_tag(const aparse_arg* arg, int indent) {
         arg->shortopt ? ", " : "",
         arg->longopt  ? arg->longopt  : ""
     ) - INDENT;
-    if(!arg->is_positional && !arg->negatable) {
+    if(!arg->is_positional && arg->negatable) {
         char* optional_arg = aparse_construct_optional_argument(arg->longopt ? arg->longopt : arg->shortopt);
-        printf(" %s", optional_arg);
+        len += printf(" %s", optional_arg);
         free(optional_arg);
     }
     bool longer = len > MAX_ARG_STR;

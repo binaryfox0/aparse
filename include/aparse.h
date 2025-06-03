@@ -75,7 +75,7 @@ APARSE_INLINE aparse_arg aparse_arg_option(char* shortopt, char* longopt, void* 
     return (aparse_arg){
         .shortopt = shortopt, .longopt = longopt, .is_argument = true,
         .is_number = is_number, .ptr = dest, .size = size,
-        .have_sign = have_sign,
+        .have_sign = have_sign, .help = help, 
         .negatable = negatable
     };
 }
