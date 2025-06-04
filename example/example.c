@@ -20,13 +20,16 @@ int main(int argc, char** argv) {
         aparse_arg_subparser("copy", copy_subargs, copy_command, "Copy file from source to destination", copy_data, src, dest),
         aparse_arg_end_marker
     };
+    int number = 0;
     aparse_arg main_args[] = {
         aparse_arg_parser("command", command),
         aparse_arg_option("-v", "--verbose", &verbose, sizeof(verbose), true, false, true, "Toggle verbosity"),
+        aparse_arg_number("number", &number, sizeof(number), true, "Just a number"),
         aparse_arg_end_marker
     };
     aparse_parse(argc, argv, main_args, "Just an example for repo");
     // Main logic here...
+    printf("Number: %d\n", number);
     printf("Verbosity: %d\n", verbose);
     return 0;
 }

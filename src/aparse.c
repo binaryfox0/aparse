@@ -65,18 +65,26 @@ typedef struct aparse_help_before // nah idk what to name it.
     bool freeable;
 } aparse_help_before;
 
-bool is_valid_number(char* str, bool allow_sign)
+bool is_valid_number(char* str, int base)
 {
-    if(!str) return 0;
-    if(!*str) return 0;
+    if (!str || !*str) return false;
+    if (!*str) return false;
+    static const char* base_str = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    for (; *str; str++) {
+        char c = toupper((unsigned char)*str);
+        bool valid = false;
 
-    if(*str == '+' || (allow_sign && *str == '-'))
-        str++;
-    for(; *str; str++)
-        if(!isdigit((uint8_t)*str))
-            return false;
+        for (int i = 0; i < base && i < 36; i++) {
+            if (c == base_str[i]) {
+                valid = true;
+                break;
+            }
+        }
+        if (!valid) return false;
+    }
     return true;
 }
+
 
 static inline bool aparse_arg_nend(const aparse_arg* arg) {
     return arg->longopt != 0 || arg->shortopt != 0;
@@ -141,7 +149,7 @@ void aparse_parse(const int argc, char** argv, aparse_arg* args, const char* pro
     }
     for(size_t i = 0; i < call_list.size; i++) {
         call_struct* tmp = (call_struct*)aparse_list_get(&call_list, i);
-        tmp->args->handler(tmp->data);
+        tmp->args->handler(tmp->data); 
         free(tmp->data);
     }
     aparse_list_free(&call_list);
@@ -203,7 +211,7 @@ bool aparse_process_argument(char* argv, const aparse_arg *arg) {
 
         // Determine base
         int base = 10;
-        const char* p = argv;
+        char* p = argv;
         bool is_negative = false;
 
         if (arg->have_sign && (*p == '-' || *p == '+')) {
@@ -225,7 +233,7 @@ bool aparse_process_argument(char* argv, const aparse_arg *arg) {
         }
 
         // Check if valid number
-        if (!is_valid_number(argv, arg->have_sign)) {
+        if (!is_valid_number(p, base)) {
             fprintf(stderr, "%s: error: invalid number '%s'\n", progname, argv);
             return false;
         }
