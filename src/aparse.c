@@ -195,22 +195,53 @@ int aparse_parse_private(const int argc, char** argv, aparse_arg* args, int* ind
     return 0;
 }
 
-
 bool aparse_process_argument(char* argv, const aparse_arg *arg) {
     if (!arg->ptr) return true;
 
     if (arg->is_number) {
-        if(arg->size == 0) {
-            return false;
+        if (arg->size == 0) return false;
+
+        // Determine base
+        int base = 10;
+        const char* p = argv;
+        bool is_negative = false;
+
+        if (arg->have_sign && (*p == '-' || *p == '+')) {
+            if (*p == '-') is_negative = true;
+            p++;
         }
-        if(!is_valid_number(argv, arg->have_sign)) {
+
+        if (p[0] == '0') {
+            if (p[1] == 'x' || p[1] == 'X') {
+                base = 16;
+                p += 2;
+            } else if (p[1] == 'b' || p[1] == 'B') {
+                base = 2;
+                p += 2;
+            } else if (p[1] == 'c' || p[1] == 'C') {
+                base = 8;
+                p += 2;
+            }
+        }
+
+        // Check if valid number
+        if (!is_valid_number(argv, arg->have_sign)) {
             fprintf(stderr, "%s: error: invalid number '%s'\n", progname, argv);
             return false;
         }
-        uint64_t num = arg->have_sign ? (int64_t)strtoll(argv, NULL, 10) : strtoull(argv, NULL, 10);
+
+        uint64_t num = 0;
+
+        if (arg->have_sign) {
+            int64_t signed_val = strtoll(argv, NULL, base);
+            num = (uint64_t)signed_val;
+        } else {
+            num = strtoull(argv, NULL, base);
+        }
+
         memcpy(arg->ptr, &num, min(arg->size, 8));
 
-        // Directly manipulating the sign bit (MSB)
+        // Directly manipulate sign bit (if needed)
         if (arg->have_sign) {
             uint8_t* b = (uint8_t*)arg->ptr + (APARSE_LITTLE_ENDIAN ? arg->size - 1 : 0);
             *b = (*b & ~0x80) | (((int64_t)num < 0) ? 0x80 : 0);
@@ -220,13 +251,7 @@ bool aparse_process_argument(char* argv, const aparse_arg *arg) {
 
         if (arg->size == 0) { // dynamic
             char** dst = (char**)arg->ptr;
-            // char* tmp = realloc(*dst, len);
-            // if (!tmp) {
-            //     fprintf(stderr, "%s: error: failure to allocate memory for parsing procedure. Retry again.\n", progname);
-            //     return false;
-            // }
-            // *dst = tmp;
-            *dst = argv;
+            *dst = argv; // You might want strdup(argv) if original buffer isn't persistent
         } else {
             size_t n = min(arg->size - 1, len);
             memcpy(arg->ptr, argv, n);
@@ -235,6 +260,7 @@ bool aparse_process_argument(char* argv, const aparse_arg *arg) {
     }
     return true;
 }
+
 
 void aparse_process_parser(const int argc, const char* cargv, char** argv, const aparse_arg* arg, int* index)
 {
