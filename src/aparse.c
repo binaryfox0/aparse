@@ -259,7 +259,7 @@ bool aparse_process_argument(char* argv, const aparse_arg *arg) {
 
         if (arg->size == 0) { // dynamic
             char** dst = (char**)arg->ptr;
-            *dst = argv; // You might want strdup(argv) if original buffer isn't persistent
+            *dst = argv;
         } else {
             size_t n = min(arg->size - 1, len);
             memcpy(arg->ptr, argv, n);
@@ -276,11 +276,11 @@ void aparse_process_parser(const int argc, const char* cargv, char** argv, const
     aparse_arg* ptr2 = arg->subargs;
     int found2;
     for(; aparse_arg_nend(ptr2); ptr2++) {
-            if(found2 = !strcmp(cargv, ptr2->longopt))
+            if((found2 = !strcmp(cargv, ptr2->longopt)))
                 break;
         }
     if(!found2) {
-        aparse_print_usage(current_args);
+        aparse_print_usage();
         fprintf(stderr, "%s: error: invalid choice: '%s' (choose from ", progname, cargv);
         for(aparse_arg* ptr2 = arg->subargs; aparse_arg_nend(ptr2); ptr2++) {
             fprintf(stderr, "%s%s", ptr2->longopt, aparse_arg_nend(ptr2 + 1) ? ", " : "");
@@ -592,7 +592,7 @@ aparse_arg* aparse_argv_matching(const char* argv, aparse_arg* args)
     aparse_arg* positional = 0;
     for (aparse_arg* real = args; aparse_arg_nend(real); real++) {
         if (real->is_positional) {
-            if (!real->flags & BITMASK_0)
+            if (!(real->flags & BITMASK_0))
                 if(!positional)
                     positional = real;
             continue;
