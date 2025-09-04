@@ -29,7 +29,6 @@ SOFTWARE.
 #include <stdint.h>
 #include <stddef.h>
 
-#include "aparse_black_magic.h"
 
 #if defined(_MSC_VER)
 #   define APARSE_INLINE __forceinline
@@ -39,6 +38,49 @@ SOFTWARE.
 
 #ifdef __cplusplus
 extern "C" {
+#endif
+
+#if _MSVC_TRADITIONAL == 1 || __GNUC__ || __clang__
+#   define __VA_ARGS_EXPANSION_CONFORM
+// Token pasting helper
+#   define __cat(a, b) __cat_impl(a, b)
+#   define __cat_impl(a, b) a##b
+
+// Count number of arguments passed to a variadic macro (supports up to 16)
+#   define __count_args(...) __count_args_impl(__VA_ARGS__, \
+        16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1)
+#   define __count_args_impl( \
+        _1, _2, _3, _4, _5, _6, _7, _8, \
+        _9, _10,_11,_12,_13,_14,_15,_16,N,...) N
+
+// Macro expansion helpers
+#   define __expand(...) __VA_ARGS__
+
+// Mapper macros for variadic input expansion
+#   define __map_1(m, a, x)               m(a, x)
+#   define __map_2(m, a, x, ...)          m(a, x), __map_1(m, a, __VA_ARGS__)
+#   define __map_3(m, a, x, ...)          m(a, x), __map_2(m, a, __VA_ARGS__)
+#   define __map_4(m, a, x, ...)          m(a, x), __map_3(m, a, __VA_ARGS__)
+#   define __map_5(m, a, x, ...)          m(a, x), __map_4(m, a, __VA_ARGS__)
+#   define __map_6(m, a, x, ...)          m(a, x), __map_5(m, a, __VA_ARGS__)
+#   define __map_7(m, a, x, ...)          m(a, x), __map_6(m, a, __VA_ARGS__)
+#   define __map_8(m, a, x, ...)          m(a, x), __map_7(m, a, __VA_ARGS__)
+#   define __map_9(m, a, x, ...)          m(a, x), __map_8(m, a, __VA_ARGS__)
+#   define __map_10(m, a, x, ...)         m(a, x), __map_9(m, a, __VA_ARGS__)
+#   define __map_11(m, a, x, ...)         m(a, x), __map_10(m, a, __VA_ARGS__)
+#   define __map_12(m, a, x, ...)         m(a, x), __map_11(m, a, __VA_ARGS__)
+#   define __map_13(m, a, x, ...)         m(a, x), __map_12(m, a, __VA_ARGS__)
+#   define __map_14(m, a, x, ...)         m(a, x), __map_13(m, a, __VA_ARGS__)
+#   define __map_15(m, a, x, ...)         m(a, x), __map_14(m, a, __VA_ARGS__)
+#   define __map_16(m, a, x, ...)         m(a, x), __map_15(m, a, __VA_ARGS__)
+#   define __map(m, a, ...) __cat(__map_, __count_args(__VA_ARGS__))(m, a, __VA_ARGS__)
+
+#   define offsetof_and_sizeof(s, m) offsetof(s, m), sizeof(((s*)0)->m )
+#   define __offsetofs(s, ...) { __expand(__map(offsetof_and_sizeof, s, __VA_ARGS__)) }
+#   define aparse_arg_subparser(name, subargs, handle, help, data_struct, ...) \
+       aparse_arg_subparser_impl(name, subargs, handle, help, (int[])__offsetofs(data_struct, __VA_ARGS__), __count_args(__VA_ARGS__))
+#else
+#   pragma message("Warning: This compiler wasn't conformed to __VA_ARGS__ in C standard")
 #endif
 
 typedef struct aparse_arg_s aparse_arg;
@@ -96,10 +138,6 @@ APARSE_INLINE aparse_arg aparse_arg_string(char* name, void* dest, int size, cha
     };
 }
 
-#define offsetof_and_sizeof(s, m) offsetof(s, m), sizeof(((s*)0)->m )
-#define __offsetofs(s, ...) { __expand(__map(offsetof_and_sizeof, s, __VA_ARGS__)) }
-#define aparse_arg_subparser(name, subargs, handle, help, data_struct, ...) \
-    aparse_arg_subparser_impl(name, subargs, handle, help, (int[])__offsetofs(data_struct, __VA_ARGS__), __count_args(__VA_ARGS__))
 APARSE_INLINE aparse_arg aparse_arg_subparser_impl(
     char* name,aparse_arg* subargs, void (*handle)(void*), 
     char* help, int* data_layout, int layout_size
@@ -118,7 +156,7 @@ APARSE_INLINE aparse_arg aparse_arg_parser(char* name, aparse_arg* subparsers) {
 
 #define aparse_arg_end_marker (aparse_arg){0}
 
-void aparse_parse(const int argc, char** argv, aparse_arg* args, const char* program_desc);
+extern void aparse_parse(const int argc, char** argv, aparse_arg* args, const char* program_desc);
 
 #ifdef __cplusplus 
 }

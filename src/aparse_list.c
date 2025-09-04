@@ -1,4 +1,4 @@
-/*
+/* Priority=1, FileContentStart=25
 MIT License
 
 Copyright (c) 2025 binaryfox0
