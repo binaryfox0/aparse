@@ -40,7 +40,7 @@ SOFTWARE.
 extern "C" {
 #endif
 
-#if _MSVC_TRADITIONAL == 1 || __GNUC__ || __clang__
+#if _MSVC_TRADITIONAL == 0 || __GNUC__ || __clang__
 #   define __VA_ARGS_EXPANSION_CONFORM
 // Token pasting helper
 #   define __cat(a, b) __cat_impl(a, b)
@@ -83,58 +83,76 @@ extern "C" {
 #   pragma message("Warning: This compiler wasn't conformed to __VA_ARGS__ in C standard")
 #endif
 
+typedef enum aparse_arg_types_e aparse_arg_types;
+enum aparse_arg_types_e
+{
+    APARSE_ARG_TYPE_SIGNED_FLAGS = (1 << 7),
+
+    APARSE_ARG_UNKNOWN = 0,
+    APARSE_ARG_TYPE_STRING,
+    APARSE_ARG_TYPE_BOOL,
+    APARSE_ARG_TYPE_UNSIGNED,
+    APARSE_ARG_TYPE_FLOAT,
+    APARSE_ARG_TYPE_ARRAY = (1 << 3),
+
+    APARSE_ARG_TYPE_POSITIONAL = (1 << 4),
+    APARSE_ARG_TYPE_ARGUMENT   = (1 << 5),
+    APARSE_ARG_TYPE_SUBPARSER  = APARSE_ARG_TYPE_POSITIONAL,
+    
+    APARSE_ARG_TYPE_SIGNED = APARSE_ARG_TYPE_UNSIGNED | APARSE_ARG_TYPE_SIGNED_FLAGS,
+
+    APARSE_ARG_TYPE_BITMASK = 0b111
+};
+
 typedef struct aparse_arg_s aparse_arg;
 struct aparse_arg_s
 {
     char* shortopt;
     char* longopt;
     char* help;
-    bool is_positional; // otherwise optional
-    bool is_argument; // otherwise parser
+    aparse_arg_types type;
     uint8_t flags;
-    // For argument //
+    // ==APARSE_ARG_TYPE_ARRAY:   size of requirement member in output array
+    // &APARSE_ARG_TYPE_ARGUMENT: size of output variable
+    // ~APARSE_ARG_TYPE_ARGUMENT: number of member in struct/pair in data_layout
+    int size;
     union {
-        struct {
-            void* ptr;
-            bool is_number;
-            int size;
-            // For integer
-            bool have_sign;
-        };
+        // For arguments
+        void* ptr;
         // For subparsers/subcommands
         struct {
             aparse_arg* subargs;
             void (*handler)(void* data);
             int* data_layout;
-            int layout_size;
         };
     };
-    // For optional
-    bool negatable;
 };
 
-APARSE_INLINE aparse_arg aparse_arg_option(char* shortopt, char* longopt, void* dest, int size, bool is_number, bool have_sign, bool negatable, char* help) {
+APARSE_INLINE aparse_arg aparse_arg_option(char* shortopt, char* longopt, void* dest, int size, aparse_arg_types type, char* help) {
     return (aparse_arg){
-        .shortopt = shortopt, .longopt = longopt, .is_argument = true,
-        .is_number = is_number, .ptr = dest, .size = size,
-        .have_sign = have_sign, .help = help, 
-        .negatable = negatable
+        .shortopt = shortopt, .longopt = longopt,
+        .type = type | APARSE_ARG_TYPE_ARGUMENT, 
+        .ptr = dest, .size = size, .help = help,
     };
 }
 
-APARSE_INLINE aparse_arg aparse_arg_number(char* name, void* dest, int size, bool have_sign, char* help) {
+APARSE_INLINE aparse_arg aparse_arg_number(char* name, void* dest, int size, aparse_arg_types type, char* help) {
     return (aparse_arg){
-        .longopt = name, .is_positional = true, .is_argument = true,
-        .ptr = dest, .is_number = true, .size = size, 
-        .have_sign = have_sign, .help = help
+        .longopt = name, .ptr = dest, .size = size, 
+        .help = help,
+        .type = type | 
+            APARSE_ARG_TYPE_POSITIONAL | 
+            APARSE_ARG_TYPE_ARGUMENT
     };    
 }
 
 APARSE_INLINE aparse_arg aparse_arg_string(char* name, void* dest, int size, char* help) {
     return (aparse_arg) {
-        .longopt = name, .is_positional = true, .is_argument = true,
-        .ptr = dest, .size=size,
+        .longopt = name, .ptr = dest, .size=size,
         .help = help,
+        .type = APARSE_ARG_TYPE_STRING |
+            APARSE_ARG_TYPE_POSITIONAL |
+            APARSE_ARG_TYPE_ARGUMENT
     };
 }
 
@@ -144,14 +162,18 @@ APARSE_INLINE aparse_arg aparse_arg_subparser_impl(
 ) {
     return (aparse_arg) {
         .longopt = name, .subargs = subargs, .handler = handle,
-        .data_layout = data_layout, .layout_size = layout_size,
+        .data_layout = data_layout, .size = layout_size,
         .help = help,
-        .is_positional = 1 // parser doesn't care 'bout this, but help constructor DOES care
+        .type = APARSE_ARG_TYPE_POSITIONAL // parser doesn't care 'bout this, but help constructor DOES care
     };
 }
 
 APARSE_INLINE aparse_arg aparse_arg_parser(char* name, aparse_arg* subparsers) {
-    return (aparse_arg){.longopt = name, .subargs = subparsers, .is_positional = true};
+    return (aparse_arg){.longopt = name, .subargs = subparsers, .type = APARSE_ARG_TYPE_POSITIONAL};
+}
+
+APARSE_INLINE aparse_arg aparse_arg_array(char* name, void* dest, int size, int argument_size, char* help) {
+
 }
 
 #define aparse_arg_end_marker (aparse_arg){0}

@@ -5,12 +5,16 @@
 typedef struct copy_data { char* src, *dest; } copy_data;
 void copy_command(void* data) {
     copy_data* processed = data;
-    // Processing here...
+    printf("Source: %s, Destionation: %s\n", processed->src, processed->dest);
+    // Processed here...
 }
 
 int main(int argc, char** argv) {
     // Variable
     bool verbose = false;
+    int number = 0;
+    float constant = -1;
+
     aparse_arg copy_subargs[] = {
         aparse_arg_string("file", 0, 0, "Source"),
         aparse_arg_string("dest", 0, 0, "Destionation"),
@@ -20,16 +24,21 @@ int main(int argc, char** argv) {
         aparse_arg_subparser("copy", copy_subargs, copy_command, "Copy file from source to destination", copy_data, src, dest),
         aparse_arg_end_marker
     };
-    int number = 0;
     aparse_arg main_args[] = {
         aparse_arg_parser("command", command),
-        aparse_arg_option("-v", "--verbose", &verbose, sizeof(verbose), true, false, true, "Toggle verbosity"),
-        aparse_arg_number("number", &number, sizeof(number), true, "Just a number"),
+        aparse_arg_number("number", &number, sizeof(number), APARSE_ARG_TYPE_SIGNED, "Just a number"),
+        aparse_arg_option("-v", "--verbose", &verbose, sizeof(verbose), APARSE_ARG_TYPE_BOOL, "Toggle verbosity"),
+        aparse_arg_option("-c", "--constant", &constant, sizeof(constant), APARSE_ARG_TYPE_FLOAT, "Just a constant"),
         aparse_arg_end_marker
     };
+    printf("program: info: sizeof(copy_subargs): %lu, sizeof(command): %lu, sizeof(main_args): %lu, total: %lu\n",
+        sizeof(copy_subargs), sizeof(command), sizeof(main_args),
+        sizeof(copy_subargs) + sizeof(command) + sizeof(main_args)
+    );
     aparse_parse(argc, argv, main_args, "Just an example for repo");
     // Main logic here...
     printf("Number: %d\n", number);
+    printf("Constant: %f\n", constant);
     printf("Verbosity: %d\n", verbose);
     return 0;
 }

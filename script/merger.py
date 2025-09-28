@@ -88,6 +88,7 @@ if __name__ == '__main__':
         fname = file_lists[i][1].name
         handle = pair[0]
         content_start = pair[1]
+        macro = set()
 
         append_banner(dest_file, fname + " BEGIN")
         content_end = file_lists[i][2]["FileContentEnd"] if "FileContentEnd" in file_lists[i][2] else 2147483647 # A big number
@@ -95,8 +96,13 @@ if __name__ == '__main__':
         for line_i, line in enumerate(handle, start=content_start):
             if not line or line_i > content_end:
                 break
+            if(line.startswith("#define ")):
+                macro.append(line.split(maxsplit=2)[1].split('(')[0])
             dest_file.write(line)
         handle.close()
+        dest_file.write("\n")
+        for m in macro:
+            dest_file.write("#undef " + m + "\n")
         append_banner(dest_file, fname + " END")
 
     dest_file.write("\n#endif /* APARSE_IMPLEMENTATION */")
