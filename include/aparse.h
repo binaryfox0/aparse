@@ -110,7 +110,7 @@ struct aparse_arg_s
     char* shortopt;
     char* longopt;
     char* help;
-    aparse_arg_types type;
+    aparse_arg_types type : 8;
     uint8_t flags;
     // ==APARSE_ARG_TYPE_ARRAY:   size of requirement member in output array
     // &APARSE_ARG_TYPE_ARGUMENT: size of output variable
@@ -118,7 +118,10 @@ struct aparse_arg_s
     int size;
     union {
         // For arguments
-        void* ptr;
+        struct {
+            void* ptr;
+            int element_size;
+        };
         // For subparsers/subcommands
         struct {
             aparse_arg* subargs;
@@ -172,8 +175,12 @@ APARSE_INLINE aparse_arg aparse_arg_parser(char* name, aparse_arg* subparsers) {
     return (aparse_arg){.longopt = name, .subargs = subparsers, .type = APARSE_ARG_TYPE_POSITIONAL};
 }
 
-APARSE_INLINE aparse_arg aparse_arg_array(char* name, void* dest, int size, int argument_size, char* help) {
-
+APARSE_INLINE aparse_arg aparse_arg_array(char* name, void* dest, int array_size, aparse_arg_types type, int element_size, char* help) {
+    return (aparse_arg){
+        .longopt = name, .ptr = dest, .size = array_size / (element_size == 0 ? sizeof(char*) : element_size),
+        .type = APARSE_ARG_TYPE_ARGUMENT | APARSE_ARG_TYPE_ARRAY | APARSE_ARG_TYPE_POSITIONAL | type,
+        .help = help, .element_size = element_size
+    };
 }
 
 #define aparse_arg_end_marker (aparse_arg){0}

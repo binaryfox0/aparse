@@ -58,7 +58,7 @@ struct aparse_arg_s
 **1. Normal arguments (`APARSE_ARG_TYPE_ARGUMENT`)**
 - **Definition**: The size of the destination variable (`ptr`) in bytes
 - **Special case (strings)**:
-  - If `type == APARSE_ARG_TYPE_STRING` **and** ` size == 0`, the parser will automatically allocate memory for it, and you will be the one need to free it. We expect you pass the ptr as `char**`
+  - If `type == APARSE_ARG_TYPE_STRING` **and** ` size == 0`, the parser will automatically assign the `argv[index]` to `*ptr`, don't free it. We expect you pass the ptr as `char**`
 - **Recommendation**: Using `sizeof` operator on the output variable.   
 
 **2. Array arguments (`APARSE_ARG_TYPE_ARRAY`)**
