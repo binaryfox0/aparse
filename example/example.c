@@ -40,7 +40,7 @@ int main(int argc, char** argv) {
         sizeof(copy_subargs), sizeof(command), sizeof(main_args),
         sizeof(copy_subargs) + sizeof(command) + sizeof(main_args)
     );
-    aparse_parse(argc, argv, main_args, "Just an example for repo");
+    aparse_parse(argc, argv, main_args, 0);
     // Main logic here...
     printf("Number: %d\n", number);
     printf("Constant: %f\n", constant);

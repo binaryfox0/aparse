@@ -564,8 +564,10 @@ void aparse_unknown_message(const aparse_internal internal) {
 void aparse_print_help(aparse_arg* main_args) {
     aparse_print_usage();
     printf("\n");
-    if(root_args == current_args)
-        printf("%s\n\n", prog_desc);
+    if(root_args == current_args) {
+        if(prog_desc)
+            printf("%s\n\n", prog_desc);
+    }
     printf("positional arguments:\n");
     aparse_print_positional_help(main_args);
     printf("\noptions:\n");
@@ -821,7 +823,7 @@ aparse_internal aparse_construct_internal(aparse_arg* args, bool is_sublayer)
         if(args->type & APARSE_ARG_TYPE_ARRAY && args->size == 0)
             positional_count--;
     }
-    aparse_library_info("%d", positional_count);
+    // aparse_library_info("%d", positional_count);
     aparse_internal out = { positional_count, 0, {0, 0, 0}, is_sublayer};
     aparse_list_new(&out.unknown, 0, sizeof(char*));
     return out;

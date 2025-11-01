@@ -104,8 +104,7 @@ enum aparse_arg_types_e
     APARSE_ARG_TYPE_BITMASK = 0b111
 };
 
-typedef struct aparse_arg_s aparse_arg;
-struct aparse_arg_s
+typedef struct aparse_arg_s 
 {
     char* shortopt;
     char* longopt;
@@ -124,12 +123,12 @@ struct aparse_arg_s
         };
         // For subparsers/subcommands
         struct {
-            aparse_arg* subargs;
+            struct aparse_arg_s* subargs;
             void (*handler)(void* data);
             int* data_layout;
         };
     };
-};
+} aparse_arg;
 
 APARSE_INLINE aparse_arg aparse_arg_option(char* shortopt, char* longopt, void* dest, int size, aparse_arg_types type, char* help) {
     return (aparse_arg){
