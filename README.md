@@ -54,7 +54,8 @@ int main(int argc, char** argv) {
         sizeof(copy_subargs), sizeof(command), sizeof(main_args),
         sizeof(copy_subargs) + sizeof(command) + sizeof(main_args)
     );
-    aparse_parse(argc, argv, main_args, "Just an example for repo");
+    if(aparse_parse(argc, argv, main_args, "Just an example for repo") != 0)
+        return 1;
     // Main logic here...
     printf("Number: %d\n", number);
     printf("Constant: %f\n", constant);

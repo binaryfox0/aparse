@@ -11,3 +11,7 @@ set_property(TARGET aparse PROPERTY C_STANDARD 99)
 project(example C)
 add_executable(example example/example.c)
 target_link_libraries(example PRIVATE aparse)
+
+project(tests C)
+add_executable(tests example/tests.c)
+target_link_libraries(tests PRIVATE aparse)

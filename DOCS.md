@@ -181,10 +181,13 @@ Create a aparse_arg entry for parser
 `aparse_arg_end_marker`
 Create a aparse_arg that marks the end of an array of aparse_arg
 
-`void aparse_parse(const int argc, char** argv, aparse_arg* args, const char* program_desc)`
+`int aparse_parse(const int argc, char** argv, aparse_arg* args, const char* program_desc)`
 Parse the command line
 ### Paramaters
 - [in] **argc** Number of arguments in `argv`
 - [in] **argv** List of argument string
 - [in] **args** An array of aparse_arg use for parsing command line
 - [in, opt] **program_desc** Description for the purpose of program
+
+### Return value
+- [out] status for parsing procedure, 0 if success and APARSE_ABORT for failure

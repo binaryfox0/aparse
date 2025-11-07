@@ -31,7 +31,7 @@ SOFTWARE.
 
 typedef struct aparse_list
 {
-    uint8_t* ptr;
+    void* ptr;
     size_t size;
     size_t capacity;
     size_t var_size;

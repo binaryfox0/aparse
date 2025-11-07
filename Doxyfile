@@ -1,0 +1,27 @@
+DOXYFILE_ENCODING      = UTF-8
+PROJECT_NAME           = "aparse"
+OUTPUT_DIRECTORY       = docs
+
+EXTRACT_ALL            = YES
+EXTRACT_STATIC         = YES
+EXTRACT_LOCAL_CLASSES  = YES
+
+HIDE_UNDOC_MEMBERS     = NO
+HIDE_UNDOC_CLASSES     = NO
+
+WARNINGS               = YES
+WARN_IF_UNDOCUMENTED   = YES
+WARN_IF_DOC_ERROR      = YES
+
+INPUT                  = include
+FILE_PATTERNS          = *.h
+RECURSIVE              = NO
+
+ENABLE_PREPROCESSING   = YES
+MACRO_EXPANSION        = YES
+EXPAND_ONLY_PREDEF     = NO
+PREDEFINED             = _WIN32 NTDDI_VERSION=0x0A000002 __attribute__(())= APARSE_INLINE=inline
+
+GENERATE_HTML          = YES
+HTML_OUTPUT            = html
+HTML_COLORSTYLE        = AUTO_DARK

@@ -30,11 +30,13 @@ SOFTWARE.
 #define min(a, b) ((a) < (b) ? (a) : (b))
 
 bool aparse_list_new(aparse_list* list, size_t init_size, size_t var_size) {
+    if(!var_size)
+        return false;
     list->var_size = var_size;
     list->size = 0;
     list->ptr = NULL;
     list->capacity = 0;
-    return aparse_list_resize(list, init_size);
+    return init_size > 0 ? aparse_list_resize(list, init_size) : false;
 }
 
 bool aparse_list_resize(aparse_list* list, size_t new_size) {
