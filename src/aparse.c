@@ -377,7 +377,7 @@ bool aparse_process_optional(const int argc, char* const* argv, int* index, apar
         uint8_t* b = (uint8_t*)arg->ptr + (APARSE_LITTLE_ENDIAN ? arg->size - 1 : 0);
         if(!was_set) *b |= 1;
         arg->flags |= APARSE_ARG_PROCESSED;
-        return true;
+        return APARSE_STATUS_OK;
     }
     // if has equal
     if(arg->flags & APARSE_ARG_EQUAL_VAL) {
