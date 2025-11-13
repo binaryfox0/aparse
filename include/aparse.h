@@ -61,7 +61,7 @@ SOFTWARE.
 
 #define aparse_prog_info(fmt, ...) printf("%s: " APARSE_ANSIES("\x1b[1;34m") "info" APARSE_ANSIES("\x1b[0m") ": " fmt "\n", __aparse_progname, ##__VA_ARGS__)
 #define aparse_prog_warn(fmt, ...) printf("%s: " APARSE_ANSIES("\x1b[1;33m") "warn" APARSE_ANSIES("\x1b[0m") ": " fmt "\n", __aparse_progname, ##__VA_ARGS__)
-#define aparse_prog_error(fmt, ...) fprintf(stderr, "%s: "  APARSE_ANSIES("\x1b[1;31m") "error" APARSE_ANSIES("\x1b[0m") ": " fmt "\n", ##__VA_ARGS__)
+#define aparse_prog_error(fmt, ...) fprintf(stderr, "%s: "  APARSE_ANSIES("\x1b[1;31m") "error" APARSE_ANSIES("\x1b[0m") ": " fmt "\n", __aparse_progname, ##__VA_ARGS__)
 
 #ifdef __cplusplus
 extern "C" {

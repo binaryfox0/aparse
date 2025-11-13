@@ -647,6 +647,11 @@ void aparse_default_error_callback(const aparse_status status, const void* field
             );
             break;
         }
+        default:
+        {
+            aparse_library_error("unhandled error message");
+            break;
+        }
     }
 }
 
