@@ -368,13 +368,13 @@ bool aparse_process_optional(const int argc, char* const* argv, int* index, apar
     if(aparse_type_compare(arg, APARSE_ARG_TYPE_BOOL))
     {
         if(arg->flags & APARSE_ARG_PROCESSED)
-            return true;
+            return APARSE_STATUS_FAILURE;
         bool was_set = false;
         for(int i = 0; i < arg->size; i++)
             if(((char*)arg->ptr)[i])
                 was_set = true;
         memset(arg->ptr, 0, arg->size);
-        uint8_t* b = (uint8_t*)arg->ptr + (APARSE_LITTLE_ENDIAN ? arg->size - 1 : 0);
+        uint8_t* b = (uint8_t*)arg->ptr + (APARSE_LITTLE_ENDIAN ? 0 : arg->size - 1);
         if(!was_set) *b |= 1;
         arg->flags |= APARSE_ARG_PROCESSED;
         return APARSE_STATUS_OK;
