@@ -56,9 +56,9 @@ SOFTWARE.
 
 #define min(a, b) ((a < b) ? (a) : (b))
 
-#define aparse_error_label APARSE_ANSIES("\x1b[1;31m") "error" APARSE_ANSIES("\x1b[0m") ": "
-#define aparse_library_info(fmt, ...) printf("aparse: " APARSE_ANSIES("\x1b[1;34m") "info" APARSE_ANSIES("\x1b[0m") ": " fmt "\n", ##__VA_ARGS__)
-#define aparse_library_warn(fmt, ...) printf("aparse: " APARSE_ANSIES("\x1b[1;33m") "warn" APARSE_ANSIES("\x1b[0m") ": " fmt "\n", ##__VA_ARGS__)
+#define aparse_error_label __aparse_ansies("\x1b[1;31m") "error" __aparse_ansies("\x1b[0m") ": "
+#define aparse_library_info(fmt, ...) printf("aparse: " __aparse_ansies("\x1b[1;34m") "info" __aparse_ansies("\x1b[0m") ": " fmt "\n", ##__VA_ARGS__)
+#define aparse_library_warn(fmt, ...) printf("aparse: " __aparse_ansies("\x1b[1;33m") "warn" __aparse_ansies("\x1b[0m") ": " fmt "\n", ##__VA_ARGS__)
 #define aparse_library_error(fmt, ...) fprintf(stderr, "aparse: "  aparse_error_label fmt "\n", ##__VA_ARGS__)
 #define aparse_program_error(fmt, ...) fprintf(stderr, "%s: "  aparse_error_label fmt "\n", __aparse_progname, ##__VA_ARGS__)
 #define aparse_raise_error(type, field1, field2) { err_cb((type), (field1), (field2), err_userdata); return APARSE_STATUS_FAILURE; }
@@ -161,6 +161,29 @@ void aparse_set_error_callback(const aparse_error_callback cb, void* userdata)
         err_cb = aparse_default_error_callback, err_userdata = 0;
     else
         err_cb = cb, err_userdata = userdata;
+}
+
+const char* aparse_error_msg(const aparse_status status)
+{
+    static const char* error_msg[] = {
+        "Parsing succeeded with no errors",
+        "General parsing failure (unspecified). ",
+        "Unrecognized command-line argument or option",
+        "Options/Arrays expected multiple value, but none was provided ",
+        "Value provided for the argument was invalid ",
+        "Numeric value exceeds supported range ",
+        "Numeric value is below supported rang",
+        "Expected positional argument was not provided. ",
+        "Subcommand not found or unrecognized",
+        "A required pointer argument was NULL. ",
+        "Argument type is invalid or mismatched. ",
+        "Argument size is invalid for its type",
+        "Memory allocation failed. ",
+        "Unhandled type of argument. "
+    };
+    if(status < 0 && status >= __APARSE_STATUS_ENUM_END__)
+        return 0;
+    return error_msg[status];
 }
 
 // --------------------------------------- PRIVATE ---------------------------------------

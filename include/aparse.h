@@ -59,14 +59,6 @@ SOFTWARE.
 #endif
 
 
-#define aparse_prog_info(fmt, ...) printf("%s: " APARSE_ANSIES("\x1b[1;34m") "info" APARSE_ANSIES("\x1b[0m") ": " fmt "\n", __aparse_progname, ##__VA_ARGS__)
-#define aparse_prog_warn(fmt, ...) printf("%s: " APARSE_ANSIES("\x1b[1;33m") "warn" APARSE_ANSIES("\x1b[0m") ": " fmt "\n", __aparse_progname, ##__VA_ARGS__)
-#define aparse_prog_error(fmt, ...) fprintf(stderr, "%s: "  APARSE_ANSIES("\x1b[1;31m") "error" APARSE_ANSIES("\x1b[0m") ": " fmt "\n", __aparse_progname, ##__VA_ARGS__)
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /** 
  * @defgroup aparse_macros aparse's helper macros
  * @brief Macros to define parser arguments and subparsers.
@@ -81,7 +73,7 @@ extern "C" {
 #if _MSVC_TRADITIONAL == 0 || __GNUC__ || __clang__
 #   define __APARSE_VA_ARGS_EXPANSION_CONFORM
 
-/** @cond INTERNAL */
+/** @cond HIDDEN */
 
 #   define __aparse_cat_impl(a, b) a##b
 
@@ -187,6 +179,50 @@ extern "C" {
 
 /** @} */ // end of aparse_macros
 
+/** @cond HIDDEN */
+
+// A trick to deal with Microsoft Visual Studio Compiler macro expansion (indirection trick)
+#define __aparse_printf_impl(fmt, ...) printf(fmt, ##__VA_ARGS__)
+#define __aparse_printf(fmt, ...) __aparse_printf_impl(fmt, ##__VA_ARGS__)
+#define __aparse_fprintf_impl(fp, fmt, ...) fprintf(fp, fmt, ##__VA_ARGS__)
+#define __aparse_fprintf(fp, fmt, ...) __aparse_fprintf_impl(fp, fmt, ##__VA_ARGS__)
+
+/** @endcond */
+
+/**
+ * @brief Print informational message to stdout, with color if supported
+ *
+ * @param fmt to a null-terminated multibyte string specifying how to interpret the data
+ * @param ... specifying data to print. Undefined behaviour if type mismatched, discarded if extraneous
+ *
+ * @note Should be used after calling \ref aparse_parse, otherwise program name will be `(null)`
+ */
+#define aparse_prog_info(fmt, ...) __aparse_printf("%s: " __aparse_ansies("\x1b[1;34m") "info" __aparse_ansies("\x1b[0m") ": " fmt "\n", __aparse_progname, ##__VA_ARGS__)
+
+/**
+ * @brief Print warning message to stdout, with color if supported
+ *
+ * @param fmt to a null-terminated multibyte string specifying how to interpret the data
+ * @param ... specifying data to print. Undefined behaviour if type mismatched, discarded if extraneous
+ *
+ * @note Should be used after calling \ref aparse_parse, otherwise program name will be `(null)`
+ */
+#define aparse_prog_warn(fmt, ...) __aparse_printf("%s: " __aparse_ansies("\x1b[1;33m") "warn" __aparse_ansies("\x1b[0m") ": " fmt "\n", __aparse_progname, ##__VA_ARGS__)
+
+/**
+ * @brief Print error message to stdout, with color if supported
+ *
+ * @param fmt to a null-terminated multibyte string specifying how to interpret the data
+ * @param ... specifying data to print. Undefined behaviour if type mismatched, discarded if extraneous
+ *
+ * @note Should be used after calling \ref aparse_parse, otherwise program name will be `(null)`
+ */
+#define aparse_prog_error(fmt, ...) __aparse_fprintf(stderr, "%s: "  __aparse_ansies("\x1b[1;31m") "error" __aparse_ansies("\x1b[0m") ": " fmt "\n", __aparse_progname, ##__VA_ARGS__)
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /**
  * @enum aparse_arg_types_e
@@ -443,7 +479,8 @@ enum aparse_status_e
     APARSE_STATUS_INVALID_SIZE,         /**< Argument size is invalid for its type. */
 
     APARSE_STATUS_ALLOC_FAILURE,        /**< Memory allocation failed. */
-    APARSE_STATUS_UNHANDLED             /**< Unhandled type of argument. */
+    APARSE_STATUS_UNHANDLED,            /**< Unhandled type of argument. */
+    __APARSE_STATUS_ENUM_END__          /**< The marker for the end of aparse_status. THIS MUST BE AT THE END */
 };
 
 /** @typedef aparse_status
@@ -519,7 +556,6 @@ extern const char* __aparse_progname;
 // - https://en.wikipedia.org/wiki/ANSI_escape_code#DOS_and_Windows 
 #   if defined(NTDDI_VERSION) && (NTDDI_VERSION >= NTDDI_WIN10_TH2)
 /**
- * @def APARSE_ANSIES(str)
  * @brief Conditionally enables ANSI escape sequences on supported platforms.
  *
  * This macro is used to wrap ANSI color or style escape codes in a way
@@ -527,7 +563,7 @@ extern const char* __aparse_progname;
  * support virtual terminal sequences.
  *
  * On Unix-like systems, or on Windows 10 build 10586 (Version 1511, "TH2")
- * and newer, `APARSE_ANSIES(str)` expands to `str` directly.
+ * and newer, `__aparse_ansies(str)` expands to `str` directly.
  * On older Windows versions, it expands to nothing, effectively disabling
  * colored output.
  *
@@ -542,10 +578,10 @@ extern const char* __aparse_progname;
  * @see https://learn.microsoft.com/en-us/windows/console/console-virtual-terminal-sequences
  * @see https://en.wikipedia.org/wiki/ANSI_escape_code#DOS_and_Windows
  */
-#       define APARSE_ANSIES(str) str
+#       define __aparse_ansies(str) str
 #   endif
 #else
-#   define APARSE_ANSIES(str) str
+#   define __aparse_ansies(str) str
 #endif
 
 /**
@@ -738,6 +774,8 @@ extern int aparse_parse(const int argc, char* const * argv, aparse_arg* args, co
  * @note Passing `NULL` as @p cb using the library default callback.
  */
 extern void aparse_set_error_callback(const aparse_error_callback cb, void* userdata);
+
+extern const char* aparse_error_msg(const aparse_status status);
 
 #ifdef __cplusplus 
 }

@@ -36,18 +36,21 @@ int main(int argc, char** argv) {
         aparse_arg_option("-c", "--constant", &constant, sizeof(constant), APARSE_ARG_TYPE_FLOAT, "Just a constant"),
         aparse_arg_end_marker
     };
-    printf("program: info: sizeof(copy_subargs): %lu, sizeof(command): %lu, sizeof(main_args): %lu, total: %lu\n",
+
+    if(aparse_parse(argc, argv, main_args, 0) != APARSE_STATUS_OK)
+        return 1;
+
+    aparse_prog_info("sizeof(copy_subargs): %lu, sizeof(command): %lu, sizeof(main_args): %lu, total: %lu",
         sizeof(copy_subargs), sizeof(command), sizeof(main_args),
         sizeof(copy_subargs) + sizeof(command) + sizeof(main_args)
     );
-    if(aparse_parse(argc, argv, main_args, 0) != APARSE_STATUS_OK)
-        return 1;
+
     // Main logic here...
-    printf("Number: %d\n", number);
-    printf("Constant: %f\n", constant);
-    printf("Verbosity: %d\n", verbose);
+    aparse_prog_info("Number: %d", number);
+    aparse_prog_info("Constant: %f", constant);
+    aparse_prog_info("Verbosity: %d", verbose);
     for(int i = 0; i < main_args[2].size && strings; i++)
-        printf("strings[%d]: '%s'\n", i, strings[i]);
+        aparse_prog_info("strings[%d]: '%s'", i, strings[i]);
     if(strings)
         free(strings); // Deallocate pointer that aparse allocated for us
     return 0;
