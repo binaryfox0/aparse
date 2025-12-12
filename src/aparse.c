@@ -379,7 +379,7 @@ int aparse_process_parser(const int argc, const char* cargv, char* const* argv, 
         aparse_list_free(&context.unknown);
         return APARSE_STATUS_FAILURE;
     }
-    if(!ptr2->handler || !data)
+    if(!ptr2->handler)
         free(data);
     else
         aparse_list_add(&call_list, (call_struct[1]){{ptr2, data}});
