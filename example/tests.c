@@ -33,18 +33,10 @@ static int spawn_process(const test_entry test)
         return -1;
     }
 
-    size_t arrsz = 3 + test.argc;
-    char** argv = malloc(sizeof(char*) * arrsz);
-    if(!argv)
-    {
-        aparse_prog_error("unable to allocate memory to spawn process");
-        return -1;
-    }
+    char *argv[3] = {0};
     argv[0] = path;
     argv[1] = test.name;
-    for(int i = 0; i < test.argc; i++)
-        argv[i + 2] = test.argv[i];
-    argv[arrsz - 1] = 0;
+    argv[2] = 0;
 
     pid_t pid = -1;
     if(posix_spawn(&pid, path, 0, 0, argv, 0) == -1)
@@ -60,21 +52,32 @@ static int spawn_process(const test_entry test)
         return -1;
     }
 
-    return status;
+    return (status >> 8) & 0xff;
 #else
 #endif
 }
 
-// return: aparse_list typeof(aparse_list.
-aparse_list populate_args(aparse_arg* main_args)
+void populate_dest(aparse_arg* main_args, uint8_t** buf,
+        const size_t row)
 {
-    aparse_list out = { .var_size = sizeof(void*) };
-    while(aparse_arg_nend)
+    int idx = 0;
+    for(aparse_arg* a = main_args; aparse_arg_nend(a); a++)
+    {
+        
+        a->ptr = buf[idx++];
+        if(idx >= row)
+        {
+            aparse_prog_error("insufficient buffer when populating argument's dest");
+            return;
+        }
+    }
 }
 
+static aparse_status last_status = APARSE_STATUS_OK;
 static void error_callback(const aparse_status status, const void* field1, const void* field2, void *userdata)
 {
     aparse_prog_info("%s: %s", __func__, aparse_error_msg(status));
+    last_status = status;
 }
 
 typedef struct copy_data { char* src, *dest; } copy_data;
@@ -85,10 +88,8 @@ void copy_command(void* data)
 int main(int argc, char** argv)
 {
     const char* test_name = 0;
-    char** tests_arg = 0;
     aparse_arg main_args[] = {
         aparse_arg_string("test_name", &test_name, 0, "the test to perform"),
-        aparse_arg_array("argv", &tests_arg, 0, APARSE_ARG_TYPE_STRING, 0, "arguments for the specified test"),
         aparse_arg_end_marker
     };
     if(aparse_parse(argc, argv, main_args, 0) != APARSE_STATUS_OK)
@@ -103,20 +104,30 @@ int main(int argc, char** argv)
         aparse_arg_subparser("copy", copy_subargs, copy_command, "Copy file from source to destination", copy_data, src, dest),
         aparse_arg_end_marker
     };
-    aparse_arg main_args[] = {
+    aparse_arg args_1[] = {
         aparse_arg_parser("command", command),
-        aparse_arg_number("number", &number, sizeof(number), APARSE_ARG_TYPE_SIGNED, "Just a number"),
-        // array_size=0: take all argument after it. library automatically allocated memory for it
-        // element_size=0: means the string have no size limitation
-        aparse_arg_array("strings", &strings, 0, APARSE_ARG_TYPE_STRING, 0, "An array of strings"),
-        aparse_arg_option("-v", "--verbose", &verbose, sizeof(verbose), APARSE_ARG_TYPE_BOOL, "Toggle verbosity"),
-        aparse_arg_option("-c", "--constant", &constant, sizeof(constant), APARSE_ARG_TYPE_FLOAT, "Just a constant"),
+        aparse_arg_number("number", 0, 2,
+                APARSE_ARG_TYPE_SIGNED, "Just a number"),
+        aparse_arg_array("strings", 0, 2, APARSE_ARG_TYPE_STRING, 0, "An array of strings"),
+        aparse_arg_option("-v", "--verbose", 0, 4,
+                APARSE_ARG_TYPE_BOOL, "Toggle verbosity"),
+        aparse_arg_option("-c", "--constant", 0, 4,
+                APARSE_ARG_TYPE_FLOAT, "Just a constant"),
+        aparse_arg_end_marker
+    };
+
+    aparse_arg no_args[] = {
+        aparse_arg_number("number", 0, 4,
+                APARSE_ARG_TYPE_SIGNED, "A signed integer"),
         aparse_arg_end_marker
     };
 
 
     const test_entry tests[] = {
-        {"no-arg", }
+        {"no-arg", 1, (char*[]){"tests"}, 
+            no_args, APARSE_STATUS_MISSING_POSITIONAL},
+        {"invalid-cmd", 2, (char*[]){"tests", "a"},
+            args_1, APARSE_STATUS_INVALID_SUBCOMMAND}
     };
     const int tests_count = sizeof(tests) / sizeof(tests[0]);
 
@@ -125,19 +136,23 @@ int main(int argc, char** argv)
         for(int i = 0; i < tests_count; i++)
         {
             int status = spawn_process(tests[i]);
-            aparse_prog_info("test %d (\"%s\"): %s, status: %d", i + 1, tests[i].name, status == 0 ? "passed" : "failed", status);
+            int expected_status = tests[i].expected_status;
+            int fail = status != expected_status;
+            aparse_prog_info("test %d (\"%s\"): %s", i + 1, tests[i].name, fail ? "failed" : "passed");
+            if(fail)
+                aparse_prog_info("test %d expected: %d, got: %d", i + 1, status, expected_status);
         }
     } else {
-        int test_found = 0;
+        int test_idx = -1;
         for(int i = 0; i < tests_count; i++)
         {
             if(!strcmp(test_name, tests[i].name))
             {
-                test_found = 1;
+                test_idx = i;
                 break;
             }
         }
-        if(!test_found)
+        if(test_idx == -1)
         {
             aparse_prog_error("unable to find the test with the following name: \"%s\"", test_name);
             aparse_prog_info("the available tests were:");
@@ -145,6 +160,13 @@ int main(int argc, char** argv)
                 printf(" - %s\n", tests[i].name);
             return 1;
         }
+
+        test_entry entry = tests[test_idx];
+        uint8_t buf[8][8] = {0};
+        populate_dest(entry.args, (uint8_t**)buf, sizeof(buf) / sizeof(buf[0]));
+        aparse_set_error_callback(error_callback, 0);
+        aparse_parse(entry.argc, entry.argv, entry.args, 0);
+        return last_status;
     }
     
     return 0;

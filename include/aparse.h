@@ -745,6 +745,18 @@ APARSE_INLINE aparse_arg aparse_arg_array(char* name, void* dest, int array_size
 #define aparse_arg_end_marker (aparse_arg){0}
 
 /**
+ * @brief Check if the current aparse_arg was an end marker
+ *
+ * @param arg The aparse_arg to check
+ *
+ * @note This will only check for `longopt` and `shortopt`, all the remaining
+ * information will be discarded
+ */
+static inline bool aparse_arg_nend(const aparse_arg* arg) {
+    return arg->longopt != 0 || arg->shortopt != 0;
+}
+
+/**
  * @brief Parse command-line arguments.
  *
  * Parses command-line input (`argc` / `argv`) according to a provided

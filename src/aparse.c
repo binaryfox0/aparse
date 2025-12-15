@@ -86,9 +86,6 @@ APARSE_INLINE bool aparse_arg_is_argument(const aparse_arg* arg) {
 static inline bool aparse_type_compare(const aparse_arg* arg, const aparse_arg_types type) {
     return (arg->type & APARSE_ARG_TYPE_BITMASK) == type;
 }
-static inline bool aparse_arg_nend(const aparse_arg* arg) {
-    return arg->longopt != 0 || arg->shortopt != 0;
-}
 
 static aparse_arg* root_args = 0, *current_args = 0;
 const char* __aparse_progname = 0;
@@ -189,6 +186,8 @@ const char* aparse_error_msg(const aparse_status status)
 // --------------------------------------- PRIVATE ---------------------------------------
 int aparse_parse_private(const int argc, char* const * argv, aparse_arg* args, int* index, aparse_context* internal)
 {
+    if(!args)
+        return APARSE_STATUS_OK;
     current_args = args;
     while (*index < argc) {
         int found = 0;
@@ -358,7 +357,8 @@ bool aparse_process_argument(const char* argv, const aparse_arg *arg) {
 
 int aparse_process_parser(const int argc, const char* cargv, char* const* argv, aparse_arg* arg, int* index)
 {
-    // Find subcommand for parser
+    if(!arg->subargs)
+        return APARSE_STATUS_OK;
     aparse_arg* ptr2 = arg->subargs;
     int found2;
     for(; aparse_arg_nend(ptr2); ptr2++) {
