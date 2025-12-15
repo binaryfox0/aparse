@@ -358,7 +358,10 @@ bool aparse_process_argument(const char* argv, const aparse_arg *arg) {
 int aparse_process_parser(const int argc, const char* cargv, char* const* argv, aparse_arg* arg, int* index)
 {
     if(!arg->subargs)
+    {
+        err_cb(APARSE_STATUS_NULL_POINTER, arg, 0, err_userdata);
         return APARSE_STATUS_OK;
+    }
     aparse_arg* ptr2 = arg->subargs;
     int found2;
     for(; aparse_arg_nend(ptr2); ptr2++) {
@@ -370,6 +373,10 @@ int aparse_process_parser(const int argc, const char* cargv, char* const* argv, 
         for(aparse_arg* copy = arg_list.ptr; aparse_arg_nend(copy); copy++, arg_list.size++) {}
         aparse_raise_error(APARSE_STATUS_INVALID_SUBCOMMAND, &arg_list, cargv);
     }
+
+    if(!ptr2->subargs)
+        return APARSE_STATUS_OK;
+
     // Found it!, compose struct for it to handler process.
     char* data = aparse_compose_data(ptr2);
     aparse_context context = aparse_fill_context(ptr2->subargs, true);
