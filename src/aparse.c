@@ -375,7 +375,10 @@ int aparse_process_parser(const int argc, const char* cargv, char* const* argv, 
     }
 
     if(!ptr2->subargs)
+    {
+        aparse_list_add(&call_list, (call_struct[1]){{ptr2, 0}});
         return APARSE_STATUS_OK;
+    }
 
     // Found it!, compose struct for it to handler process.
     char* data = aparse_compose_data(ptr2);
