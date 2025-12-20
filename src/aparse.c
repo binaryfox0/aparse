@@ -290,6 +290,7 @@ bool aparse_process_argument(const char* argv, const aparse_arg *arg) {
         uint64_t num = 0;
         char* endptr = 0;
 
+        errno = 0;
         if (have_sign) {
             int64_t signed_val = strtoll(p, &endptr, base);
             num = (uint64_t)signed_val;
@@ -312,23 +313,25 @@ bool aparse_process_argument(const char* argv, const aparse_arg *arg) {
             size_t bits = arg->size * 8;
             if (have_sign) {
             {
+                // This was intended
                 int64_t min_val = -(1LL << (bits - 1));
                 int64_t max_val =  (1LL << (bits - 1)) - 1;
                 if ((int64_t)num < min_val || (int64_t)num > max_val)
                     aparse_raise_error(APARSE_STATUS_OVERFLOW, arg, argv);
             }
             } else {
+                // This was intended, 0 - 1 result in UINT64_MAX
                 uint64_t max_val = ((1ULL << bits) - 1);
                 if (num > max_val)
                     aparse_raise_error(APARSE_STATUS_OVERFLOW, arg, argv);
             }
         }
 
-        memcpy(arg->ptr, &num, min(arg->size, 8));
+        memcpy(arg->ptr, (uint8_t*)arg->ptr + (APARSE_LITTLE_ENDIAN ? 0 : 8 - arg->size), arg->size);
 
         if (have_sign) {
-            uint8_t* b = (uint8_t*)arg->ptr + (APARSE_LITTLE_ENDIAN ? arg->size - 1 : 0);
-            *b = (*b & ~0x80) | (((int64_t)num < 0) ? 0x80 : 0);
+            uint8_t* msb = (uint8_t*)arg->ptr + (APARSE_LITTLE_ENDIAN ? arg->size - 1 : 0);
+            *msb = (*msb & ~0x80) | (((int64_t)num < 0) ? 0x80 : 0);
         }
         break;
     }

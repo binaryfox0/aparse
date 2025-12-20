@@ -22,6 +22,17 @@ typedef struct test_entry {
     uint32_t* hashs;
 } test_entry;
 
+
+static inline uint32_t fnv1a(const char *s)
+{
+    uint32_t h = 2166136261u;
+    for (; *s; s++) {
+        h ^= (unsigned char)*s;
+        h *= 16777619u;
+    }
+    return h;
+}
+
 // Return value: the process status
 static int spawn_process(const test_entry test)
 {
@@ -57,91 +68,105 @@ static int spawn_process(const test_entry test)
 #endif
 }
 
-void populate_dest(aparse_arg* main_args, uint8_t** buf,
-        const size_t row)
-{
-    int idx = 0;
-    for(aparse_arg* a = main_args; aparse_arg_nend(a); a++)
-    {
-        
-        a->ptr = buf[idx++];
-        if(idx >= row)
-        {
-            aparse_prog_error("insufficient buffer when populating argument's dest");
-            return;
-        }
-    }
-}
-
 static aparse_status last_status = APARSE_STATUS_OK;
 static void error_callback(const aparse_status status, const void* field1, const void* field2, void *userdata)
 {
-    aparse_prog_info("%s: %s", __func__, aparse_error_msg(status));
+    aparse_prog_error("%s: %s", __func__, aparse_error_msg(status));
+    if(status == APARSE_STATUS_NULL_POINTER)
+    {
+        aparse_prog_info("\"%s\" had a null pointer", ((aparse_arg*)field1)->longopt);
+    }
     last_status = status;
 }
 
 typedef struct copy_data { char* src, *dest; } copy_data;
+static int subcommand_status = -1;
 void copy_command(void* data)
 {
+    copy_data* ptr = data;
+    uint32_t src_hash = fnv1a(ptr->src);
+    uint32_t dest_hash = fnv1a(ptr->dest);
+    if(src_hash == 0xB6F3934E && dest_hash == 0xDD856CFC)
+        subcommand_status = 1;
+    else
+        subcommand_status = 0;
 }
 
 int main(int argc, char** argv)
 {
+    int force = 0;
     const char* test_name = 0;
     aparse_arg main_args[] = {
         aparse_arg_string("test_name", &test_name, 0, "the test to perform"),
+        aparse_arg_option("-f", "--force", &force, sizeof(force), APARSE_ARG_TYPE_BOOL, 0),
         aparse_arg_end_marker
     };
     if(aparse_parse(argc, argv, main_args, 0) != APARSE_STATUS_OK)
         return 1;
    
+    uint8_t storage[8][8] = {0};
     aparse_arg copy_subargs[] = {
         aparse_arg_string("file", 0, 0, "Source"),
         aparse_arg_string("dest", 0, 0, "Destionation"),
         aparse_arg_end_marker
     };
     aparse_arg command[] = {
-        aparse_arg_subparser("copy", copy_subargs, copy_command, "Copy file from source to destination", copy_data, src, dest),
+        aparse_arg_subparser("copy", copy_subargs, copy_command, 0, copy_data, src, dest),
         aparse_arg_end_marker
     };
     aparse_arg args_1[] = {
         aparse_arg_parser("command", command),
-        aparse_arg_number("number", 0, 2,
-                APARSE_ARG_TYPE_SIGNED, "Just a number"),
-        aparse_arg_array("strings", 0, 2, APARSE_ARG_TYPE_STRING, 0, "An array of strings"),
-        aparse_arg_option("-v", "--verbose", 0, 4,
-                APARSE_ARG_TYPE_BOOL, "Toggle verbosity"),
-        aparse_arg_option("-c", "--constant", 0, 4,
-                APARSE_ARG_TYPE_FLOAT, "Just a constant"),
         aparse_arg_end_marker
     };
-
-    aparse_arg no_args[] = {
-        aparse_arg_number("number", 0, 4,
-                APARSE_ARG_TYPE_SIGNED, "A signed integer"),
-        aparse_arg_end_marker
+    
+    aparse_arg bignum_args[] = {
+        aparse_arg_number("bignum", storage[0], 16, APARSE_ARG_TYPE_UNSIGNED, 0),
+        aparse_arg_end_marker 
     };
-
 
     const test_entry tests[] = {
+        {.name="null-args", .argc=1, .argv=(char*[]){"tests"},
+            0, APARSE_STATUS_OK},
         {"no-arg", 1, (char*[]){"tests"}, 
-            no_args, APARSE_STATUS_MISSING_POSITIONAL},
+            args_1, APARSE_STATUS_MISSING_POSITIONAL},
         {"invalid-cmd", 2, (char*[]){"tests", "a"},
-            args_1, APARSE_STATUS_INVALID_SUBCOMMAND}
+            args_1, APARSE_STATUS_INVALID_SUBCOMMAND},
+        {.name="valid-cmd", .argc=4, .argv=(char*[]){"tests", "copy", "fox", "binary"},
+            args_1, APARSE_STATUS_OK},    
+        {.name="bignum", .argc=2, .argv=(char*[]){"tests", "0"},
+                bignum_args, APARSE_STATUS_UNHANDLED}
+        
     };
     const int tests_count = sizeof(tests) / sizeof(tests[0]);
 
+    if(!(*(unsigned char *)&(uint16_t){1}) && !force)
+    {
+        aparse_prog_error("this is only usable on little-endian machine");
+        aparse_prog_info("the order of bytes is difference, affect the hash");
+        aparse_prog_info("specify \"--force\" to force the test to run, some may fail");
+        return 0;
+    }
+ 
     if(!strcmp(test_name, "all"))
     {
+        int success_count = 0, failed_count = 0;
         for(int i = 0; i < tests_count; i++)
         {
             int status = spawn_process(tests[i]);
             int expected_status = tests[i].expected_status;
             int fail = status != expected_status;
+    
             aparse_prog_info("test %d (\"%s\"): %s", i + 1, tests[i].name, fail ? "failed" : "passed");
-            if(fail)
+            if(fail) {
+                failed_count++;
                 aparse_prog_info("test %d expected: %d, got: %d", i + 1, status, expected_status);
+            } else {
+                success_count++;
+            }
         }
+
+        printf("\n");
+        aparse_prog_info("summary: %d success, %d failed", success_count, failed_count);
     } else {
         int test_idx = -1;
         for(int i = 0; i < tests_count; i++)
@@ -162,11 +187,9 @@ int main(int argc, char** argv)
         }
 
         test_entry entry = tests[test_idx];
-        uint8_t buf[8][8] = {0};
-        populate_dest(entry.args, (uint8_t**)buf, sizeof(buf) / sizeof(buf[0]));
         aparse_set_error_callback(error_callback, 0);
         aparse_parse(entry.argc, entry.argv, entry.args, 0);
-        return last_status;
+        return subcommand_status == 0 && subcommand_status != -1 ? 255 : last_status;
     }
     
     return 0;
