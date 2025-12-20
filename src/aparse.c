@@ -276,6 +276,8 @@ bool aparse_process_argument(const char* argv, const aparse_arg *arg) {
             if (*p == '-') is_negative = true;
             p++;
         }
+        if(is_negative && !have_sign)
+            aparse_raise_error(APARSE_STATUS_UNDERFLOW, arg, 0);
 
         if (p[0] == '0') {
             switch(tolower(p[1]))
@@ -327,7 +329,7 @@ bool aparse_process_argument(const char* argv, const aparse_arg *arg) {
             }
         }
 
-        memcpy(arg->ptr, (uint8_t*)arg->ptr + (APARSE_LITTLE_ENDIAN ? 0 : 8 - arg->size), arg->size);
+        memcpy(arg->ptr, (uint8_t*)&num + (APARSE_LITTLE_ENDIAN ? 0 : 8 - arg->size), arg->size);
 
         if (have_sign) {
             uint8_t* msb = (uint8_t*)arg->ptr + (APARSE_LITTLE_ENDIAN ? arg->size - 1 : 0);
