@@ -315,8 +315,8 @@ bool aparse_process_argument(const char* argv, const aparse_arg *arg) {
             size_t bits = arg->size * 8;
             if (have_sign) {
             {
-                int64_t min_val = bits == 64 ? INT64_MAX : -(1LL << (bits - 1));
-                int64_t max_val = bits == 64 ? INT64_MIN :  (1LL << (bits - 1)) - 1;
+                int64_t min_val = bits == 64 ? INT64_MIN : -(1LL << (bits - 1));
+                int64_t max_val = bits == 64 ? INT64_MAX :  (1LL << (bits - 1)) - 1;
                 if ((int64_t)num < min_val || (int64_t)num > max_val)
                     aparse_raise_error(APARSE_STATUS_OVERFLOW, arg, argv);
             }
