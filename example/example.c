@@ -13,7 +13,7 @@ void copy_command(void* data) {
 int main(int argc, char** argv) {
     // Variable
     bool verbose = false;
-    int number = 0;
+    int64_t number = 0;
     float constant = -1;
     char** strings = 0;
 
@@ -46,7 +46,7 @@ int main(int argc, char** argv) {
     );
 
     // Main logic here...
-    aparse_prog_info("Number: %d", number);
+    aparse_prog_info("Number: %ld", number);
     aparse_prog_info("Constant: %f", constant);
     aparse_prog_info("Verbosity: %d", verbose);
     for(int i = 0; i < main_args[2].size && strings; i++)

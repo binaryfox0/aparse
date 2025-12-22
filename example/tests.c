@@ -33,6 +33,28 @@ static inline uint32_t fnv1a(const char *s)
     return h;
 }
 
+const char* status_string(const aparse_status status)
+{
+    const char* strings[] = {
+        "APARSE_STATUS_OK",
+        "APARSE_STATUS_FAILURE",
+        "APARSE_STATUS_UNKNOWN_ARGUMENT",
+        "APARSE_STATUS_INVALID_VALUE",
+        "APARSE_STATUS_OVERFLOW",
+        "APARSE_STATUS_UNDERFLOW",
+        "APARSE_STATUS_MISSING_POSITIONAL",
+        "APARSE_STATUS_INVALID_SUBCOMMAND",
+        "APARSE_STATUS_NULL_POINTER",
+        "APARSE_STATUS_INVALID_TYPE",
+        "APARSE_STATUS_INVALID_SIZE",
+        "APARSE_STATUS_ALLOC_FAILURE",
+        "APARSE_STATUS_UNHANDLED",
+    };
+    if(status < 0 || status >= __APARSE_STATUS_ENUM_END__)
+        return 0;
+    return strings[status];
+}
+
 // Return value: the process status
 static int spawn_process(const test_entry test)
 {
@@ -98,7 +120,7 @@ int main(int argc, char** argv)
     const char* test_name = 0;
     aparse_arg main_args[] = {
         aparse_arg_string("test_name", &test_name, 0, "the test to perform"),
-        aparse_arg_option("-f", "--force", &force, sizeof(force), APARSE_ARG_TYPE_BOOL, 0),
+        aparse_arg_option("-f", "--force", &force, sizeof(force), APARSE_ARG_TYPE_BOOL, "Force running the test whether system endian"),
         aparse_arg_end_marker
     };
     if(aparse_parse(argc, argv, main_args, 0) != APARSE_STATUS_OK)
@@ -123,6 +145,14 @@ int main(int argc, char** argv)
         aparse_arg_number("bignum", storage[0], 16, APARSE_ARG_TYPE_UNSIGNED, 0),
         aparse_arg_end_marker 
     };
+    aparse_arg i64_args[] = {
+        aparse_arg_number("num", storage[0], sizeof(storage[0]), APARSE_ARG_TYPE_SIGNED, 0),
+        aparse_arg_end_marker
+    };
+    aparse_arg u64_args[] = {
+        aparse_arg_number("num", storage[0], sizeof(storage[0]), APARSE_ARG_TYPE_UNSIGNED, 0),
+        aparse_arg_end_marker
+    };
 
     const test_entry tests[] = {
         {.name="null-args", .argc=1, .argv=(char*[]){"tests"},
@@ -134,8 +164,15 @@ int main(int argc, char** argv)
         {.name="valid-cmd", .argc=4, .argv=(char*[]){"tests", "copy", "fox", "binary"},
             args_1, APARSE_STATUS_OK},    
         {.name="bignum", .argc=2, .argv=(char*[]){"tests", "0"},
-                bignum_args, APARSE_STATUS_UNHANDLED}
-        
+                bignum_args, APARSE_STATUS_UNHANDLED},
+        {"i64-uf", 2, (char*[]){"tests", "-9223372036854775809"}, 
+            i64_args, APARSE_STATUS_UNDERFLOW},
+        {"i64-of", 2, (char*[]){"tests", "9223372036854775808"}, 
+            i64_args, APARSE_STATUS_OVERFLOW},
+        {"u64-uf", 2, (char*[]){"tests", "-1"}, 
+            u64_args, APARSE_STATUS_UNDERFLOW},
+        {"u64-of", 2, (char*[]){"tests", "18446744073709551616"}, 
+            u64_args, APARSE_STATUS_OVERFLOW}
     };
     const int tests_count = sizeof(tests) / sizeof(tests[0]);
 
@@ -159,7 +196,7 @@ int main(int argc, char** argv)
             aparse_prog_info("test %d (\"%s\"): %s", i + 1, tests[i].name, fail ? "failed" : "passed");
             if(fail) {
                 failed_count++;
-                aparse_prog_info("test %d expected: %d, got: %d", i + 1, status, expected_status);
+                aparse_prog_info("expected: %s, got: %s", status_string(expected_status), status_string(status));
             } else {
                 success_count++;
             }

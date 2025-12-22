@@ -163,20 +163,20 @@ void aparse_set_error_callback(const aparse_error_callback cb, void* userdata)
 const char* aparse_error_msg(const aparse_status status)
 {
     static const char* error_msg[] = {
-        "Parsing succeeded with no errors",
-        "General parsing failure (unspecified). ",
-        "Unrecognized command-line argument or option",
-        "Options/Arrays expected multiple value, but none was provided ",
-        "Value provided for the argument was invalid ",
-        "Numeric value exceeds supported range ",
-        "Numeric value is below supported rang",
-        "Expected positional argument was not provided. ",
-        "Subcommand not found or unrecognized",
-        "A required pointer argument was NULL. ",
-        "Argument type is invalid or mismatched. ",
-        "Argument size is invalid for its type",
-        "Memory allocation failed. ",
-        "Unhandled type of argument. "
+        "Parsing succeeded with no errors.",
+        "General parsing failure (unspecified).",
+        "Unrecognized command-line argument or option.",
+        "Options/Arrays expected multiple value, but none was provided.",
+        "Value provided for the argument was invalid.",
+        "Numeric value exceeds supported range.",
+        "Numeric value is below supported range.",
+        "Expected positional argument was not provided.",
+        "Subcommand not found or unrecognized.",
+        "A required pointer argument was NULL.",
+        "Argument type is invalid or mismatched.",
+        "Argument size is invalid for its type.",
+        "Memory allocation failed.",
+        "Unhandled type of argument."
     };
     if(status < 0 && status >= __APARSE_STATUS_ENUM_END__)
         return 0;
@@ -272,7 +272,7 @@ bool aparse_process_argument(const char* argv, const aparse_arg *arg) {
         const char* p = argv;
         bool is_negative = false;
 
-        if (have_sign && (*p == '-' || *p == '+')) {
+        if (*p == '-' || *p == '+') {
             if (*p == '-') is_negative = true;
             p++;
         }
@@ -289,20 +289,13 @@ bool aparse_process_argument(const char* argv, const aparse_arg *arg) {
             }
         }
 
-        uint64_t num = 0;
-        char* endptr = 0;
-
         errno = 0;
-        if (have_sign) {
-            int64_t signed_val = strtoll(p, &endptr, base);
-            num = (uint64_t)signed_val;
-        } else {
-            num = strtoull(p, &endptr, base);
-        }
+        char* endptr = 0;
+        uint64_t num = strtoull(p, &endptr, base);
         
         if(*endptr)
             aparse_raise_error(APARSE_STATUS_INVALID_VALUE, arg, argv);
-
+ 
         // Overflow/Underflow check No.1 (for 8 bytes)
         if(errno == ERANGE)
         {
@@ -314,12 +307,22 @@ bool aparse_process_argument(const char* argv, const aparse_arg *arg) {
             // Overflow/Underflow check No.2
             size_t bits = arg->size * 8;
             if (have_sign) {
-            {
+                if(is_negative)
+                {
+                    if(num > (uint64_t)INT64_MAX + 1ULL)
+                        aparse_raise_error(APARSE_STATUS_UNDERFLOW, arg, argv);
+                    if(num == (uint64_t)INT64_MAX + 1ULL)
+                        num = (uint64_t)INT64_MIN;
+                    else
+                        num = (uint64_t) -(int64_t)num;
+                } else {
+                    if(num > (uint64_t)INT64_MAX)
+                        aparse_raise_error(APARSE_STATUS_OVERFLOW, arg, argv);
                 int64_t min_val = bits == 64 ? INT64_MIN : -(1LL << (bits - 1));
                 int64_t max_val = bits == 64 ? INT64_MAX :  (1LL << (bits - 1)) - 1;
                 if ((int64_t)num < min_val || (int64_t)num > max_val)
                     aparse_raise_error(APARSE_STATUS_OVERFLOW, arg, argv);
-            }
+                }
             } else {
                 uint64_t max_val = bits == 64 ? UINT_MAX : ((1ULL << bits) - 1);
                 if (num > max_val)
