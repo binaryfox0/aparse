@@ -552,14 +552,16 @@ int aparse_process_failure(const int status, const aparse_context* context, apar
     // Not using != here as if an array paramater was specified, the positional_count have already been -= 1
     if (context->positional_count > context->positional_processed) {
         // prepare required argument list
-        aparse_list required_args;
+        aparse_list required_args = {0};
         aparse_list_new(&required_args, 0, sizeof(aparse_arg*));
         for (; aparse_arg_nend(args); args++) {
             if (aparse_arg_is_positional(args) && !(args->flags & APARSE_ARG_PROCESSED)) {
                 aparse_list_add(&required_args, &args);
             }
         }
-        aparse_raise_error(APARSE_STATUS_MISSING_POSITIONAL, current_args, &required_args);
+        err_cb(APARSE_STATUS_MISSING_POSITIONAL, current_args, &required_args, err_userdata);
+        aparse_list_free(&required_args);
+        return APARSE_STATUS_FAILURE;
     }
 
     if (context->unknown.size > 0 && !context->is_sublayer)
