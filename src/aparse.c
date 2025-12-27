@@ -523,13 +523,12 @@ char* aparse_compose_data(const aparse_arg* args)
     char* buffer = malloc(size);
     if(!buffer) return 0;
     memset(buffer, 0, size);
-    aparse_arg* real = args->subargs;
     int count = 0;
-    for(int i = 0; i < args->size && aparse_arg_nend(real); i++, real++)
+    for(aparse_arg* real = args->subargs; count < args->size && aparse_arg_nend(real); real++)
     {
         if(!aparse_arg_is_argument(real) || !aparse_arg_is_positional(real))
             continue;
-        int base = i * 2;
+        int base = count * 2;
         real->ptr = &buffer[args->data_layout[base]];
         count++;
         if(real->size == 0 && aparse_type_compare(real, APARSE_ARG_TYPE_STRING))
