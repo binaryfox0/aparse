@@ -63,11 +63,18 @@ SOFTWARE.
 #define aparse_program_error(fmt, ...) fprintf(stderr, "%s: "  aparse_error_label fmt "\n", __aparse_progname, ##__VA_ARGS__)
 #define aparse_raise_error(type, field1, field2) { err_cb((type), (field1), (field2), err_userdata); return APARSE_STATUS_FAILURE; }
 
-typedef struct aparse_context_s
+// The command handler for subparser will be called after the main parsing completed
+typedef struct aparse_dispatch {
+    aparse_arg* args;
+    void* data;
+} aparse_dispatch;
+
+typedef struct aparse_context
 {
     int positional_count;
     int positional_processed;
     aparse_list unknown;
+    aparse_list* dispatch_list;
     bool is_sublayer;
 } aparse_context;
 
@@ -96,16 +103,10 @@ static aparse_error_callback err_cb = 0;
 static void* err_userdata = 0;
 
 // Forward declaration
-int aparse_parse_private(const int argc, char * const * argv, aparse_arg* args, int* index, aparse_context* internal);
-// The command handler for subparser will be called after the main parsing completed
-static aparse_list call_list;
-typedef struct call_struct {
-    aparse_arg* args;
-    void* data;
-} call_struct;
+int aparse_parse_private(const int argc, char * const * argv, aparse_arg* args, int* index, aparse_context* context);
 // Processing each type of argument
 bool aparse_process_argument(const char* argv, const aparse_arg* arg);
-int aparse_process_parser(const int argc, const char* cargv, char* const* argv, aparse_arg* arg, int* index);
+int aparse_process_parser(const int argc, const char* cargv, char* const* argv, aparse_arg* arg, int* index, aparse_context* context);
 bool aparse_process_optional(const int argc, char* const* argv, int* index, aparse_arg* arg);
 // Processing each data type
 int aparse_process_float(const char* argv, const aparse_arg* arg);
@@ -125,15 +126,19 @@ void aparse_print_usage();
 aparse_arg* aparse_argv_matching(const char* argv, aparse_arg* args);
 const char* aparse_extract_exename(const char* argv0);
 char* aparse_construct_optional_argument(char* longopt);
-aparse_context aparse_fill_context(aparse_arg* args, bool is_sublayer);
+aparse_context aparse_fill_context(const aparse_context *prev, aparse_arg* args, bool is_sublayer);
 
-int aparse_parse(const int argc, char* const * argv, aparse_arg* args, const char* program_desc)
+int aparse_parse(const int argc, char* const * argv,
+        aparse_arg* args, aparse_list* dispatch_list_out, const char* program_desc)
 {
+    aparse_list dispatch_list = {0};
     __aparse_progname = aparse_extract_exename(argv[0]);
     prog_desc = program_desc;
     root_args = args;
-    aparse_context context = aparse_fill_context(args, false);
-    aparse_list_new(&call_list, 0, sizeof(call_struct));
+
+    aparse_list_new(&dispatch_list, 0, sizeof(aparse_dispatch));
+    aparse_context context = aparse_fill_context(0, args, false);
+    context.dispatch_list = &dispatch_list;
     if(!err_cb)
         aparse_set_error_callback(0, 0);
 
@@ -142,14 +147,39 @@ int aparse_parse(const int argc, char* const * argv, aparse_arg* args, const cha
         aparse_list_free(&context.unknown);
         return APARSE_STATUS_FAILURE;
     }
-    for(size_t i = 0; i < call_list.size; i++) {
-        call_struct* tmp = (call_struct*)aparse_list_get(&call_list, i);
-        tmp->args->handler(tmp->data); 
-        free(tmp->data);
-    }
-    aparse_list_free(&call_list);
     aparse_list_free(&context.unknown);
+
+    *dispatch_list_out = dispatch_list;
+
     return APARSE_STATUS_OK;
+}
+
+void aparse_dispatch_all(aparse_list* dispatch_list)
+{
+    if(!dispatch_list || !dispatch_list->ptr || dispatch_list->size < 1)
+        return;
+    aparse_dispatch* list = dispatch_list->ptr;
+    for(size_t i = 0; i < dispatch_list->size; i++)
+    {
+        list[i].args->handler(list[i].data);
+        free(list[i].data);
+    }
+    aparse_list_free(dispatch_list);
+}
+
+int aparse_dispatch_contain(const aparse_list* dispatch_list, const char* name)
+{
+    if(!dispatch_list || !dispatch_list->ptr || dispatch_list->size < 1 || !name || !*name)
+        return 1;
+    aparse_dispatch* list = dispatch_list->ptr;
+    for(size_t i = 0; i < dispatch_list->size; i++)
+    {
+        if(!list[i].args->longopt)
+            continue;
+        if(!strcmp(list[i].args->longopt, name))
+            return 0;
+    }
+    return 1;
 }
 
 void aparse_set_error_callback(const aparse_error_callback cb, void* userdata)
@@ -184,7 +214,7 @@ const char* aparse_error_msg(const aparse_status status)
 }
 
 // --------------------------------------- PRIVATE ---------------------------------------
-int aparse_parse_private(const int argc, char* const * argv, aparse_arg* args, int* index, aparse_context* internal)
+int aparse_parse_private(const int argc, char* const * argv, aparse_arg* args, int* index, aparse_context* context)
 {
     if(!args)
         return APARSE_STATUS_OK;
@@ -197,7 +227,7 @@ int aparse_parse_private(const int argc, char* const * argv, aparse_arg* args, i
         aparse_arg* ptr = aparse_argv_matching(cargv, args);
         if(ptr) {
             if(aparse_arg_is_positional(ptr)) {
-                internal->positional_processed++;
+                context->positional_processed++;
                 ptr->flags |= APARSE_ARG_PROCESSED;
                 if(aparse_arg_is_argument(ptr)) {
                     if(ptr->type & APARSE_ARG_TYPE_ARRAY ?
@@ -206,7 +236,7 @@ int aparse_parse_private(const int argc, char* const * argv, aparse_arg* args, i
                     )
                         return APARSE_STATUS_FAILURE;
                 } else  {
-                    if(aparse_process_parser(argc, cargv, argv, ptr, index) != APARSE_STATUS_OK)
+                    if(aparse_process_parser(argc, cargv, argv, ptr, index, context) != APARSE_STATUS_OK)
                         return APARSE_STATUS_FAILURE;
                     current_args = args; // reset it
                 }
@@ -221,12 +251,12 @@ int aparse_parse_private(const int argc, char* const * argv, aparse_arg* args, i
                 }
             }
         } else {
-            if (aparse_list_add(&internal->unknown, &cargv)) {
+            if (aparse_list_add(&context->unknown, &cargv)) {
                 err_cb(APARSE_STATUS_ALLOC_FAILURE, 0, 0, err_userdata);
                 return APARSE_STATUS_FAILURE;
             }
 
-            if (internal->is_sublayer) {
+            if (context->is_sublayer) {
                 (*index)--; 
                 return -1;
             }
@@ -361,7 +391,8 @@ bool aparse_process_argument(const char* argv, const aparse_arg *arg) {
 }
 
 
-int aparse_process_parser(const int argc, const char* cargv, char* const* argv, aparse_arg* arg, int* index)
+int aparse_process_parser(const int argc, const char* cargv, char* const* argv,
+        aparse_arg* arg, int* index, aparse_context* context)
 {
     if(!arg->subargs)
     {
@@ -382,24 +413,24 @@ int aparse_process_parser(const int argc, const char* cargv, char* const* argv, 
 
     if(!ptr2->subargs)
     {
-        aparse_list_add(&call_list, (call_struct[1]){{ptr2, 0}});
+        aparse_list_add(context->dispatch_list, (aparse_dispatch[1]){{ptr2, 0}});
         return APARSE_STATUS_OK;
     }
 
     // Found it!, compose struct for it to handler process.
     char* data = aparse_compose_data(ptr2);
-    aparse_context context = aparse_fill_context(ptr2->subargs, true);
+    aparse_context new_context = aparse_fill_context(context, ptr2->subargs, true);
     if(aparse_process_failure(aparse_parse_private(argc, argv, 
-        ptr2->subargs, index, &context), &context, ptr2->subargs)) {
+        ptr2->subargs, index, &new_context), &new_context, ptr2->subargs)) {
         free(data);
-        aparse_list_free(&context.unknown);
+        aparse_list_free(&new_context.unknown);
         return APARSE_STATUS_FAILURE;
     }
     if(!ptr2->handler)
         free(data);
     else
-        aparse_list_add(&call_list, (call_struct[1]){{ptr2, data}});
-    aparse_list_free(&context.unknown);
+        aparse_list_add(context->dispatch_list, (aparse_dispatch[1]){{ptr2, data}});
+    aparse_list_free(&new_context.unknown);
     return APARSE_STATUS_OK;
 }
 
@@ -948,7 +979,7 @@ char* aparse_construct_optional_argument(char* longopt)
     return out;
 }
 
-aparse_context aparse_fill_context(aparse_arg* args, bool is_sublayer)
+aparse_context aparse_fill_context(const aparse_context* prev, aparse_arg* args, bool is_sublayer)
 {
     int positional_count = 0;
     for(; aparse_arg_nend(args); args++) {
@@ -958,7 +989,12 @@ aparse_context aparse_fill_context(aparse_arg* args, bool is_sublayer)
             positional_count--;
     }
     // aparse_library_info("%d", positional_count);
-    aparse_context out = { positional_count, 0, {0, 0, 0}, is_sublayer};
+    aparse_context out = { 
+        positional_count, 0, 
+        {0, 0, 0},
+        prev ? prev->dispatch_list : 0,
+        is_sublayer
+    };
     aparse_list_new(&out.unknown, 0, sizeof(char*));
     return out;
 }

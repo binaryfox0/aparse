@@ -37,8 +37,11 @@ int main(int argc, char** argv) {
         aparse_arg_end_marker
     };
 
-    if(aparse_parse(argc, argv, main_args, 0) != APARSE_STATUS_OK)
+    aparse_list dispatch_list = {0};
+    if(aparse_parse(argc, argv, main_args, &dispatch_list, 0) != APARSE_STATUS_OK)
         return 1;
+
+    aparse_dispatch_all(&dispatch_list);
 
     aparse_prog_info("sizeof(copy_subargs): %lu, sizeof(command): %lu, sizeof(main_args): %lu, total: %lu",
         sizeof(copy_subargs), sizeof(command), sizeof(main_args),

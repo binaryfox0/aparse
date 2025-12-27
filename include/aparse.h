@@ -772,7 +772,29 @@ static inline bool aparse_arg_nend(const aparse_arg* arg) {
  *
  * @note Errors and warnings can be intercepted using ::aparse_set_error_callback.
  */
-extern int aparse_parse(const int argc, char* const * argv, aparse_arg* args, const char* program_desc);
+extern int aparse_parse(const int argc, char* const * argv, aparse_arg* args, aparse_list* dispatch_list_out, const char* program_desc);
+
+/**
+ * @brief Dispatch all queued handle
+ *
+ * Dispatch all handle with their respective constructed payload, then
+ * also freeing any resources related to payload
+ *
+ * @param dispatch_list The list of dispatched functions
+ */
+extern void aparse_dispatch_all(aparse_list* dispatch_list);
+
+/**
+ * @brief Check for the handle inside dispatch list
+ *
+ * Check if the handle inside dispatch list was existed with given name,
+ * normally it will be compared against `aparse_arg.longopt`
+ *
+ * @param name Name of dispatch handle to find
+ *
+ * @return If it wasn't existed in `dispatch_list`, return 1, otherwise return 0
+ */
+extern int aparse_dispatch_contain(const aparse_list* dispatch_list, const char* name);
 
 /**
  * @brief Set a global error callback for parser events.
