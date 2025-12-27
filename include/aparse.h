@@ -763,14 +763,16 @@ static inline bool aparse_arg_nend(const aparse_arg* arg) {
  * argument table. Supports short and long options, positional arguments,
  * and subcommands.
  *
- * @param argc          Argument count (from `main`).
- * @param argv          Argument vector (from `main`).
- * @param args          Argument definition table, terminated with ::aparse_arg_end_marker.
- * @param program_desc  Optional program description for `--help` output (may be NULL).
+ * @param argc              Argument count (from `main`).
+ * @param argv              Argument vector (from `main`).
+ * @param args              Argument definition table, terminated with ::aparse_arg_end_marker.
+ * @param dispatch_list_out Optional output for the list of dispatched function
+ * @param program_desc      Optional program description for `--help` output (may be NULL).
  *
  * @return One of the ::aparse_status codes, typically ::APARSE_STATUS_OK on success.
  *
  * @note Errors and warnings can be intercepted using ::aparse_set_error_callback.
+ * @note If `dispatch_list == NULL`, dispatched function will be executed immedieately after parsing complete
  */
 extern int aparse_parse(const int argc, char* const * argv, aparse_arg* args, aparse_list* dispatch_list_out, const char* program_desc);
 

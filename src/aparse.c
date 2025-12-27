@@ -151,6 +151,8 @@ int aparse_parse(const int argc, char* const * argv,
 
     if(dispatch_list_out)
         *dispatch_list_out = dispatch_list;
+    else
+        aparse_dispatch_all(&dispatch_list);
 
     return APARSE_STATUS_OK;
 }
