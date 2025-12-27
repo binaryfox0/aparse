@@ -183,6 +183,16 @@ int aparse_dispatch_contain(const aparse_list* dispatch_list, const char* name)
     return 1;
 }
 
+void aparse_dispatch_free(aparse_list* dispatch_list)
+{
+    if(!dispatch_list || !dispatch_list->ptr || dispatch_list->size < 1)
+        return;
+    aparse_dispatch* list = dispatch_list->ptr;
+    for(size_t i = 0; i < dispatch_list->size; i++)
+        if(list[i].data)
+            free(list[i].data);
+}
+
 void aparse_set_error_callback(const aparse_error_callback cb, void* userdata)
 {
     if(!cb)

@@ -123,7 +123,7 @@ int main(int argc, char** argv)
         aparse_arg_option("-f", "--force", &force, sizeof(force), APARSE_ARG_TYPE_BOOL, "Force running the test whether system endian"),
         aparse_arg_end_marker
     };
-    if(aparse_parse(argc, argv, main_args, 0) != APARSE_STATUS_OK)
+    if(aparse_parse(argc, argv, main_args, 0, 0) != APARSE_STATUS_OK)
         return 1;
    
     uint8_t storage[8][8] = {0};
@@ -225,7 +225,7 @@ int main(int argc, char** argv)
 
         test_entry entry = tests[test_idx];
         aparse_set_error_callback(error_callback, 0);
-        aparse_parse(entry.argc, entry.argv, entry.args, 0);
+        aparse_parse(entry.argc, entry.argv, entry.args, 0, 0);
         return subcommand_status == 0 && subcommand_status != -1 ? 255 : last_status;
     }
     

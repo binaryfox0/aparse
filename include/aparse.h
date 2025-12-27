@@ -797,6 +797,20 @@ extern void aparse_dispatch_all(aparse_list* dispatch_list);
 extern int aparse_dispatch_contain(const aparse_list* dispatch_list, const char* name);
 
 /**
+ * @brief Free a dispatch list without executing handlers
+ *
+ * Releases all resources associated with the dispatch list and its queued
+ * handlers without invoking any handler functions. Any constructed payloads
+ * stored in the list are freed.
+ *
+ * This function is typically used when argument parsing fails or when
+ * execution of dispatched handlers is intentionally skipped.
+ *
+ * @param dispatch_list List of queued dispatch handlers to be freed
+ */
+extern void aparse_dispatch_free(aparse_list* dispatch_list);
+
+/**
  * @brief Set a global error callback for parser events.
  *
  * Registers a callback function that is called whenever the parser
