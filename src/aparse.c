@@ -149,7 +149,8 @@ int aparse_parse(const int argc, char* const * argv,
     }
     aparse_list_free(&context.unknown);
 
-    *dispatch_list_out = dispatch_list;
+    if(dispatch_list_out)
+        *dispatch_list_out = dispatch_list;
 
     return APARSE_STATUS_OK;
 }
