@@ -399,15 +399,18 @@ struct aparse_arg_s
      * - Members used for subparser/subcommand definitions (`subargs`, `handler`, `data_layout`).
      */
     union {
-        /**
+       /**
          * @brief Argument-only fields (used when `type` include `APARSE_ARG_TYPE_ARGUMENT`).
          */
         struct {
-            /**
+             /**
              * @brief Pointer to the variable where the parsed value will be stored.
              */
             void* ptr;
-
+            /**
+             * @brief Desired size of the array arguments
+             */
+            int array_size;
             /**
              * @brief Size of each element for array arguments.
              */
@@ -478,6 +481,9 @@ enum aparse_status_e
     APARSE_STATUS_INVALID_TYPE,         /**< Argument type is invalid or mismatched. */
     APARSE_STATUS_INVALID_SIZE,         /**< Argument size is invalid for its type. */
 
+    APARSE_STATUS_LAYOUT_SMALL,         /**< The provided layout is too small */
+    APARSE_STATUS_LAYOUT_NONCONTIG,     /**< The layout is non-contiguous, which is unsupported */
+
     APARSE_STATUS_ALLOC_FAILURE,        /**< Memory allocation failed. */
     APARSE_STATUS_UNHANDLED,            /**< Unhandled type of argument. */
     __APARSE_STATUS_ENUM_END__          /**< The marker for the end of aparse_status. THIS MUST BE AT THE END */
@@ -500,8 +506,8 @@ typedef enum aparse_status_e aparse_status;
  * The parser never frees or modifies the data passed through @p field1 or @p field2.
  * The callback should treat them as read-only.
  *
- * | Status code                      | field1 type            | field2 type            | Description                                       |
- * |----------------------------------|------------------------|------------------------|---------------------------------------------------|
+ * | Status code                        | field1 type            | field2 type            | Description                                       |
+ * |------------------------------------|------------------------|------------------------|---------------------------------------------------|
  * | ::APARSE_STATUS_UNKNOWN_ARGUMENT   | `unknown_args`         | `NULL`                 | Unknown argument name.                            |
  * | ::APARSE_STATUS_MISSING_VALUE      | `current_arg`          | `expected_count`       | Option definition that requires a value.          |
  * | ::APARSE_STATUS_INVALID_VALUE      | `current_arg`          | `current_argv`         | Argument definition and invalid value string.     |
@@ -512,6 +518,8 @@ typedef enum aparse_status_e aparse_status;
  * | ::APARSE_STATUS_NULL_POINTER       | `current_arg`          | `NULL`                 | Invalid NULL pointer in user argument definition. |
  * | ::APARSE_STATUS_INVALID_TYPE       | `current_arg`          | `NULL`                 | Type mismatch in argument definition.             |
  * | ::APARSE_STATUS_INVALID_SIZE       | `current_arg`          | `arg_size`             | Invalid size field in argument definition.        |
+ * | ::APARSE_STATUS_LAYOUT_SMALL       | `current_arg`          | `index`                | The layout was too small for current argument     |
+ * | ::APARSE_STATUS_LAYOUT_NONCONTIG   | `current_arg`          | `index`                | The layout was non-contiguous                     |
  * | ::APARSE_STATUS_ALLOC_FAILURE      | `NULL`                 | `NULL`                 | Memory allocation failed inside parser.           |
  * | ::APARSE_STATUS_UNHANDLED          | `current_arg`          | `NULL`                 | An unhandled type of argument.                    |
  *
@@ -521,6 +529,7 @@ typedef enum aparse_status_e aparse_status;
  * - `const char*        cargv         `: The current argv is currently being processed
  * - `const aparse_list* required_args `: An aparse_list refer to a list of required arguments. `required_args.ptr` should be converted into `aparse_arg*`
  * - `const int*         size          `: The invalid size of `current_arg`. It can be `current_arg.size` or `current_arg.element_size`
+ * - `const int*         index         `: The base index of current entry inside `current_arg.data_layout`
  */
 typedef void (*aparse_error_callback)(const aparse_status status, const void* field1, const void* field2, void *userdata);
 
@@ -720,9 +729,10 @@ APARSE_INLINE aparse_arg aparse_arg_parser(char* name, aparse_arg* subparsers) {
  *
  * @note If @p element_size is 0, the parser assumes an array of pointers (`char*`).
  */
-APARSE_INLINE aparse_arg aparse_arg_array(char* name, void* dest, int array_size, aparse_arg_types type, int element_size, char* help) {
+APARSE_INLINE aparse_arg aparse_arg_array(char* name, void* dest, int size, int array_size, aparse_arg_types type, int element_size, char* help) {
     return (aparse_arg){
-        .longopt = name, .ptr = dest, .size = array_size / (element_size == 0 ? sizeof(char*) : element_size),
+        .longopt = name, .ptr = dest, .size = size,
+        .array_size = array_size / (element_size == 0 ? sizeof(char*) : element_size),
         .type = APARSE_ARG_TYPE_ARGUMENT | APARSE_ARG_TYPE_ARRAY | APARSE_ARG_TYPE_POSITIONAL | type,
         .help = help, .element_size = element_size
     };

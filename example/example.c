@@ -15,7 +15,7 @@ int main(int argc, char** argv) {
     bool verbose = false;
     int64_t number = 0;
     float constant = -1;
-    char** strings = 0;
+    aparse_list strings = {0};
 
     aparse_arg copy_subargs[] = {
         aparse_arg_string("file", 0, 0, "Source"),
@@ -31,7 +31,7 @@ int main(int argc, char** argv) {
         aparse_arg_number("number", &number, sizeof(number), APARSE_ARG_TYPE_SIGNED, "Just a number"),
         // array_size=0: take all argument after it. library automatically allocated memory for it
         // element_size=0: means the string have no size limitation
-        aparse_arg_array("strings", &strings, 0, APARSE_ARG_TYPE_STRING, 0, "An array of strings"),
+        aparse_arg_array("strings", &strings, sizeof(strings), 0, APARSE_ARG_TYPE_STRING, 0, "An array of strings"),
         aparse_arg_option("-v", "--verbose", &verbose, sizeof(verbose), APARSE_ARG_TYPE_BOOL, "Toggle verbosity"),
         aparse_arg_option("-c", "--constant", &constant, sizeof(constant), APARSE_ARG_TYPE_FLOAT, "Just a constant"),
         aparse_arg_end_marker
@@ -52,9 +52,8 @@ int main(int argc, char** argv) {
     aparse_prog_info("Number: %ld", number);
     aparse_prog_info("Constant: %f", constant);
     aparse_prog_info("Verbosity: %d", verbose);
-    for(int i = 0; i < main_args[2].size && strings; i++)
-        aparse_prog_info("strings[%d]: '%s'", i, strings[i]);
-    if(strings)
-        free(strings); // Deallocate pointer that aparse allocated for us
+    for(int i = 0; i < strings.size; i++)
+        aparse_prog_info("strings[%d]: '%s'", i, *(char**)aparse_list_get(&strings, i));
+    free(strings.ptr); // Deallocate pointer that aparse allocated for us
     return 0;
 }
