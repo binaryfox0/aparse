@@ -279,7 +279,7 @@ static int aparse_parse_private(const int argc, char* const * argv, aparse_arg* 
 
             if (context->is_sublayer) {
                 (*index)--; 
-                return -1;
+                // rescan again
             }
         }
     }
