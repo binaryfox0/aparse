@@ -272,14 +272,15 @@ static int aparse_parse_private(const int argc, char* const * argv, aparse_arg* 
                 }
             }
         } else {
+            if (context->is_sublayer) {
+                // allow option to be processed again
+                (*index)--; 
+                return -1;
+            }
+
             if (aparse_list_add(&context->unknown, &cargv)) {
                 err_cb(APARSE_STATUS_ALLOC_FAILURE, 0, 0, err_userdata);
                 return APARSE_STATUS_FAILURE;
-            }
-
-            if (context->is_sublayer) {
-                (*index)--; 
-                // rescan again
             }
         }
     }
