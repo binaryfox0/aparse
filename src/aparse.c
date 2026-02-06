@@ -609,6 +609,9 @@ static int aparse_compose_data(const aparse_arg* args, char** composed)
             free(buffer);
             return 0;
         }
+
+        if(real->ptr)
+            continue;
         
         real->ptr = &buffer[args->data_layout[base]];
         count++;
