@@ -167,6 +167,8 @@ void aparse_dispatch_all(aparse_list* dispatch_list)
 {
     if(!dispatch_list || !dispatch_list->ptr || dispatch_list->size < 1)
         return;
+    if(dispatch_list->var_size != sizeof(aparse_dispatch))
+        return;
     aparse_dispatch* list = dispatch_list->ptr;
     for(size_t i = 0; i < dispatch_list->size; i++)
     {
@@ -593,7 +595,7 @@ static int aparse_compose_data(const aparse_arg* args, char** composed)
     int count = 0, prev_offset = -1;
     for(aparse_arg* real = args->subargs; count < args->size && aparse_arg_nend(real); real++)
     {
-        if(!aparse_arg_is_argument(real) || !aparse_arg_is_positional(real))
+        if(!aparse_arg_is_argument(real))
             continue;
         int base = count * 2;
         int offset = args->data_layout[base];
