@@ -581,7 +581,7 @@ static int aparse_evaluate_size(const aparse_arg* arg)
 static int aparse_compose_data(const aparse_arg* args, char** composed)
 {
     if(!args->subargs || !args->handler)
-        aparse_raise_error(APARSE_STATUS_NULL_POINTER, 0, 0);
+        return APARSE_STATUS_OK;
 
     if(args->size < 1)
         return APARSE_STATUS_OK;
