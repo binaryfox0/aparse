@@ -113,7 +113,7 @@ if __name__ == "__main__":
     repo_path = (Path(__file__).resolve().parent / "..").resolve()
     src_dir = repo_path / "src"
 
-    output_path = Path("aparse_single.h")
+    output_path = Path("aparse.h")
 
     public_headers = [
         repo_path / "include/aparse_list.h",
