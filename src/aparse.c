@@ -35,6 +35,13 @@ SOFTWARE.
 #include <math.h>
 #include <float.h>
 
+#ifdef _WIN32
+#   include <windows.h>
+#else
+#   include <unistd.h>
+#   include <sys/ioctl.h>
+#endif
+
 #define APARSE_ARG_EQUAL_VAL   (1 << 0)
 #define APARSE_ARG_SHORT_MATCH (1 << 1)
 #define APARSE_ARG_PROCESSED   (1 << 7)
@@ -119,6 +126,7 @@ static int aparse_process_failure(const int status, const aparse_context *contex
 static void aparse_default_error_callback(const aparse_status status, const void* field1, const void* field2, void* userdata);
 // Help-related functions
 static void aparse_print_help(aparse_arg* main_args);
+static void aparse_print_wrapped(const char *text, int start_col, int term_width);
 static void aparse_print_help_tag(const aparse_arg* arg, int indent);
 static void aparse_print_positional_help(aparse_arg* args);
 static char* aparse_construct_available_subcommands(const aparse_arg* args);
@@ -128,6 +136,7 @@ static aparse_arg* aparse_argv_matching(const char* argv, aparse_arg* args);
 static const char* aparse_extract_exename(const char* argv0);
 static char* aparse_construct_optional_argument(char* longopt);
 static aparse_context aparse_fill_context(const aparse_context *prev, aparse_arg* args, bool is_sublayer);
+static int aparse_get_terminal_width(void);
 
 int aparse_parse(const int argc, char* const * argv,
         aparse_arg* args, aparse_list* dispatch_list_out, const char* program_desc)
@@ -815,6 +824,62 @@ static void aparse_print_help(aparse_arg* main_args) {
     }
 }
 
+static void aparse_print_wrapped(const char *text, int start_col, int term_width)
+{
+    int usable_width = 0;
+    int col = 0;
+    const char *p = text;
+
+    usable_width = term_width - start_col;
+
+    printf("%*s", start_col, "");
+
+    while(*p)
+    {
+        const char *word_start = NULL;
+        int word_len = 0;
+
+        if(*p == '\n')
+        {
+            putchar('\n');
+            printf("%*s", start_col, "");
+            col = 0;
+            p++;
+            continue;
+        }
+
+        while(*p && isspace((unsigned char)*p) && *p != '\n')
+            p++;
+
+        word_start = p;
+
+        while(*p && !isspace((unsigned char)*p))
+        {
+            p++;
+            word_len++;
+        }
+
+        if(word_len == 0)
+            continue;
+
+        if(col && (col + 1 + word_len > usable_width))
+        {
+            putchar('\n');
+            printf("%*s", start_col, "");
+            col = 0;
+        }
+
+        if(col)
+        {
+            putchar(' ');
+            col++;
+        }
+
+        fwrite(word_start, 1, word_len, stdout);
+        col += word_len;
+    }
+} 
+
 static void aparse_print_help_tag(const aparse_arg* arg, int indent) {
     if(!aparse_arg_is_argument(arg) && !arg->help && !aparse_arg_nend(arg)) return;
     int len = printf("%*s%s%s%s", 
@@ -831,7 +896,9 @@ static void aparse_print_help_tag(const aparse_arg* arg, int indent) {
     bool longer = len > MAX_ARG_STR;
     if(arg->help) {
         int space = INDENT + (longer ? INDENT + MAX_ARG_STR : MAX_ARG_STR - len);
-        printf("%s%*s%s", longer ? "\n" : "", space, "", arg->help);
+        if(longer)
+            printf("\n");
+        aparse_print_wrapped(arg->help, space, aparse_get_terminal_width());
     }
     printf("\n");
 }
@@ -1069,4 +1136,51 @@ static aparse_context aparse_fill_context(const aparse_context* prev, aparse_arg
     };
     aparse_list_new(&out.unknown, 0, sizeof(char*));
     return out;
+}
+
+static int aparse_get_terminal_width(void)
+{
+    int width = 0;
+    char *env = NULL;
+
+    env = getenv("COLUMNS");
+    if (env)
+    {
+        width = atoi(env);
+        if (width > 0)
+            return width;
+    }
+
+#ifdef _WIN32
+    {
+        CONSOLE_SCREEN_BUFFER_INFO csbi = {0};
+        HANDLE h = 0;
+
+        h = GetStdHandle(STD_OUTPUT_HANDLE);
+
+        if (h != INVALID_HANDLE_VALUE &&
+            GetConsoleScreenBufferInfo(h, &csbi))
+        {
+            width = csbi.srWindow.Right - csbi.srWindow.Left + 1;
+
+            if (width > 0)
+                return width;
+        }
+    }
+
+#else
+    {
+        struct winsize ws = {0};
+        if (isatty(STDOUT_FILENO))
+        {
+            if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0)
+            {
+                if (ws.ws_col > 0)
+                    return ws.ws_col;
+            }
+        }
+    }
+#endif
+
+    return 80;
 }
