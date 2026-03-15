@@ -197,7 +197,7 @@ SOFTWARE.
  *
  * @note Should be used after calling \ref aparse_parse, otherwise program name will be `(null)`
  */
-#define aparse_prog_info(fmt, ...) __aparse_printf("%s: " __aparse_ansies("\x1b[1;34m") "info" __aparse_ansies("\x1b[0m") ": " fmt "\n", __aparse_progname, ##__VA_ARGS__)
+#define aparse_prog_info(fmt, ...) __aparse_fprintf(stderr, "%s: " __aparse_ansies("\x1b[1;34m") "info" __aparse_ansies("\x1b[0m") ": " fmt "\n", __aparse_progname, ##__VA_ARGS__)
 
 /**
  * @brief Print warning message to stdout, with color if supported
@@ -207,7 +207,7 @@ SOFTWARE.
  *
  * @note Should be used after calling \ref aparse_parse, otherwise program name will be `(null)`
  */
-#define aparse_prog_warn(fmt, ...) __aparse_printf("%s: " __aparse_ansies("\x1b[1;33m") "warn" __aparse_ansies("\x1b[0m") ": " fmt "\n", __aparse_progname, ##__VA_ARGS__)
+#define aparse_prog_warn(fmt, ...) __aparse_fprintf(stderr, "%s: " __aparse_ansies("\x1b[1;33m") "warn" __aparse_ansies("\x1b[0m") ": " fmt "\n", __aparse_progname, ##__VA_ARGS__)
 
 /**
  * @brief Print error message to stdout, with color if supported
