@@ -6,7 +6,7 @@
 typedef struct copy_data { char* src, *dest; } copy_data;
 void copy_command(void* data) {
     copy_data* processed = data;
-    printf("Source: %s, Destionation: %s\n", processed->src, processed->dest);
+    aparse_prog_info("start copying from \"%s\" to \"%s\"", processed->src, processed->dest);
     // Processed here...
 }
 
@@ -55,6 +55,9 @@ int main(int argc, char** argv) {
         sizeof(copy_subargs), sizeof(command), sizeof(main_args),
         sizeof(copy_subargs) + sizeof(command) + sizeof(main_args)
     );
+    aparse_prog_info("This is an info text");
+    aparse_prog_warn("This is a warning text");
+    aparse_prog_error("This is an error text");
 
     // Main logic here...
     aparse_prog_info("Number: %ld", number);
