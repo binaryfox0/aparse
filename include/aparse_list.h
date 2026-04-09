@@ -36,11 +36,12 @@ typedef struct aparse_list
     size_t var_size;
 } aparse_list;
 
+#define aparse_list_get(list, idx, type) (*((type*)(list)->ptr + (idx)))
+
 extern int aparse_list_new(aparse_list* list, size_t init_size, size_t var_size);
 extern int aparse_list_resize(aparse_list* list, size_t new_size);
 
 extern int aparse_list_add(aparse_list* list, const void* data);
-extern void* aparse_list_get(const aparse_list* list, const size_t index);
 
 extern void aparse_list_free(aparse_list* list);
 

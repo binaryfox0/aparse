@@ -1003,7 +1003,7 @@ static void aparse_print_usage_before(aparse_arg* root, aparse_arg* target) {
     aparse_print_usage_before_r(root, target, &strs);
 
     for (size_t i = 0; i < strs.size; i++) {
-        aparse_help_before* entry = aparse_list_get(&strs, i);
+        aparse_help_before* entry = &aparse_list_get(&strs, i, aparse_help_before);
         printf("%s ", entry->str);
         if (entry->freeable) free(entry->str);
     }
@@ -1032,7 +1032,7 @@ static void aparse_print_usage_after(aparse_arg* args)
     }
     for(size_t i = 0; i < list.size; i++)
     {
-        aparse_arg* entry = *(aparse_arg**)aparse_list_get(&list, i);
+        aparse_arg* entry = aparse_list_get(&list, i, aparse_arg*);
         if(aparse_arg_is_argument(entry))
             printf("%s ", entry->longopt);
         else {

@@ -64,7 +64,7 @@ int main(int argc, char** argv) {
     aparse_prog_info("Constant: %f", constant);
     aparse_prog_info("Verbosity: %d", verbose);
     for(int i = 0; i < strings.size; i++)
-        aparse_prog_info("strings[%d]: '%s'", i, *(char**)aparse_list_get(&strings, i));
+        aparse_prog_info("strings[%d]: '%s'", i, aparse_list_get(&strings, i, char*));
     free(strings.ptr); // Deallocate pointer that aparse allocated for us
     return 0;
 }

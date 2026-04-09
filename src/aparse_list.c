@@ -73,12 +73,6 @@ int aparse_list_add(aparse_list* list, const void* data) {
     return 0;
 }
 
-void* aparse_list_get(const aparse_list* list, size_t index) {
-    if (index >= list->size)
-        return NULL;
-    return (uint8_t*)list->ptr + index * list->var_size;
-}
-
 void aparse_list_free(aparse_list* list) {
     free(list->ptr);
     list->ptr = NULL;
