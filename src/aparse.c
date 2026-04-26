@@ -121,6 +121,7 @@ static int aparse_process_array(const int argc, char* const* argv, aparse_arg* a
 // For aparse_arg is subparsers and have proper data_layout & layout_size
 static int aparse_evaluate_size(const aparse_arg* arg);
 static int aparse_compose_data(const aparse_arg* args, char** composed);
+static void aparse_destroy_data(const aparse_arg* args, char* composed);
 // Failure handling
 static int aparse_process_failure(const int status, const aparse_context *context, aparse_arg* args);
 static void aparse_default_error_callback(const aparse_status status, const void* field1, const void* field2, void* userdata);
@@ -137,6 +138,7 @@ static const char* aparse_extract_exename(const char* argv0);
 static char* aparse_construct_optional_argument(char* longopt);
 static aparse_context aparse_fill_context(const aparse_context *prev, aparse_arg* args, bool is_sublayer);
 static int aparse_get_terminal_width(void);
+
 
 int aparse_parse(const int argc, char* const * argv,
         aparse_arg* args, aparse_list* dispatch_list_out, const char* program_desc)
@@ -182,7 +184,7 @@ void aparse_dispatch_all(aparse_list* dispatch_list)
     for(size_t i = 0; i < dispatch_list->size; i++)
     {
         list[i].args->handler(list[i].data);
-        free(list[i].data);
+        aparse_destroy_data(list[i].args, list[i].data);
     }
     aparse_list_free(dispatch_list);
 }
@@ -549,6 +551,8 @@ static int aparse_process_array(const int argc, char* const * argv, aparse_arg* 
         aparse_raise_error(APARSE_STATUS_NULL_POINTER, arg, 0);
     if(arg->size < sizeof(aparse_list))
         aparse_raise_error(APARSE_STATUS_INVALID_SIZE, arg, &arg->size);
+    if((arg->type & APARSE_ARG_TYPE_BITMASK) == APARSE_ARG_TYPE_UNKNOWN)
+        aparse_raise_error(APARSE_STATUS_INVALID_TYPE, arg, 0);
 
     (*index)--;
     int remaining = argc - *index;
@@ -568,11 +572,17 @@ static int aparse_process_array(const int argc, char* const * argv, aparse_arg* 
     dest->ptr = ptr;
     dest->var_size = increment;
     arg->ptr = ptr;
-    
     arg->size = arg->element_size;
-    for(; dest->size < dest->capacity; dest->size++, (*index)++, arg->ptr += increment)
+    while(dest->size < dest->capacity)
+    {
         if(aparse_process_argument(argv[(*index)], arg) != APARSE_STATUS_OK)
             return APARSE_STATUS_FAILURE;
+        dest->size++;
+        (*index)++; 
+        arg->ptr += increment;
+    }
+    // re-assign to prevent SIGSEGV in aparse_destroy_data
+    arg->ptr = dest;
     return APARSE_STATUS_OK;
 }
 
@@ -635,6 +645,18 @@ static int aparse_compose_data(const aparse_arg* args, char** composed)
     }
     *composed = buffer;
     return APARSE_STATUS_OK;
+}
+
+static void aparse_destroy_data(const aparse_arg* args, char* composed)
+{
+    if(!args || !composed)
+        return;
+    for(aparse_arg* real = args->subargs; aparse_arg_nend(real); real++)
+    {
+        if(!(real->type & APARSE_ARG_TYPE_ARRAY))
+            continue;
+        free(((aparse_list*)real->ptr)->ptr);
+    }
 }
 
 // 0 no error, 1 error (just for cleaning up)

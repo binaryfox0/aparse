@@ -3,13 +3,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-typedef struct copy_data { char* src, *dest; } copy_data;
-void copy_command(void* data) {
-    copy_data* processed = data;
-    aparse_prog_info("start copying from \"%s\" to \"%s\"", processed->src, processed->dest);
-    // Processed here...
-}
-
 int main(int argc, char** argv) {
     // Variable
     bool verbose = false;
@@ -29,12 +22,7 @@ int main(int argc, char** argv) {
         aparse_arg_string("dest", 0, 0, "Destionation"),
         aparse_arg_end_marker
     };
-    aparse_arg command[] = {
-        aparse_arg_subparser("copy", copy_subargs, copy_command, "Copy file from source to destination", copy_data, src, dest),
-        aparse_arg_end_marker
-    };
     aparse_arg main_args[] = {
-        aparse_arg_parser("command", command),
         aparse_arg_number("number", &number, sizeof(number), APARSE_ARG_TYPE_SIGNED, "Just a number"),
         // array_size=0: take all argument after it. library automatically allocated memory for it
         // element_size=0: means the string have no size limitation
@@ -51,9 +39,9 @@ int main(int argc, char** argv) {
 
     aparse_dispatch_all(&dispatch_list);
 
-    aparse_prog_info("sizeof(copy_subargs): %lu, sizeof(command): %lu, sizeof(main_args): %lu, total: %lu",
-        sizeof(copy_subargs), sizeof(command), sizeof(main_args),
-        sizeof(copy_subargs) + sizeof(command) + sizeof(main_args)
+    aparse_prog_info("sizeof(copy_subargs): %lu, sizeof(main_args): %lu, total: %lu",
+        sizeof(copy_subargs), sizeof(main_args),
+        sizeof(copy_subargs) + sizeof(main_args)
     );
     aparse_prog_info("This is an info text");
     aparse_prog_warn("This is a warning text");

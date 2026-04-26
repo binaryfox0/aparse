@@ -29,7 +29,7 @@ SOFTWARE.
 #include <stdint.h>
 #include <stddef.h>
 
-#include "aparse_list.h" // IWYU pragma: export
+#include <aparse_list.h>
 
 /**
  * @def APARSE_INLINE
@@ -248,7 +248,7 @@ enum aparse_arg_types_e
     /**
      * @brief Unknown or uninitialized argument type.
      */
-    APARSE_ARG_UNKNOWN = 0,
+    APARSE_ARG_TYPE_UNKNOWN = 0,
 
     /**
      * @brief String argument type.
@@ -736,7 +736,11 @@ APARSE_INLINE aparse_arg aparse_arg_array(char* name, void* dest, int size, int 
     return (aparse_arg){
         .longopt = name, .ptr = dest, .size = size,
         .array_size = array_size / (element_size == 0 ? sizeof(char*) : element_size),
-        .type = APARSE_ARG_TYPE_ARGUMENT | APARSE_ARG_TYPE_ARRAY | APARSE_ARG_TYPE_POSITIONAL | type,
+        .type = 
+            APARSE_ARG_TYPE_ARGUMENT | 
+            APARSE_ARG_TYPE_ARRAY | 
+            APARSE_ARG_TYPE_POSITIONAL | 
+            type,
         .help = help, .element_size = element_size
     };
 }

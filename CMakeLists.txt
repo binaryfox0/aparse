@@ -24,6 +24,10 @@ if(APARSE_BUILD_EXAMPLE)
     target_link_libraries(example PRIVATE aparse)
     target_add_asan(example)
 
+    add_executable(subcmd example/subcmd_example.c)
+    target_link_libraries(subcmd PRIVATE aparse)
+    target_add_asan(subcmd)
+
     add_executable(tests example/tests.c)
     target_link_libraries(tests PRIVATE aparse)
     target_add_asan(tests)
