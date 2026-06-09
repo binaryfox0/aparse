@@ -80,8 +80,14 @@ int main(int argc, char **argv)
         aparse_arg_end_marker
     };
     aparse_arg subcommand_list[] = {
-        aparse_arg_subparser_impl("poly-surf", poly_surf_args, poly_surf_command, "Calculate a polygon surface area from given list of points", (int[]){0, sizeof(aparse_list)}, 1),
-        aparse_arg_subparser_impl("poly-perm", poly_surf_args, poly_perm_command, "Calculate a polygon perimitter length from given list of points", (int[]){0, sizeof(aparse_list)}, 1),
+        aparse_arg_subparser_impl("poly-surf", poly_surf_args, poly_surf_command,
+                0, 0,
+                "Calculate a polygon surface area from given list of points", 
+                (int[]){0, sizeof(aparse_list)}, 1),
+        aparse_arg_subparser_impl("poly-perm", poly_surf_args, poly_perm_command, 
+                0, 0,
+                "Calculate a polygon perimitter length from given list of points", 
+                (int[]){0, sizeof(aparse_list)}, 1),
         aparse_arg_end_marker
     };
     aparse_arg main_args[] = {

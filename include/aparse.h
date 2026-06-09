@@ -155,12 +155,14 @@ SOFTWARE.
  * @param name        The argument name (string).
  * @param subargs     Pointer to subparser argument array.
  * @param handle      Function pointer to handler called after parsing.
+ * @param buffer      Pointer to user-defined buffer described by the layout
+ * @param size        The size of the buffer 
  * @param help        Help string describing this subparser.
  * @param data_struct Struct type containing members to map.
  * @param ...         List of member names of `data_struct` to include in the layout.
  *
  * @note Uses compiler-specific variadic macro expansions; some older compilers
- *       may not support it correctly.
+ *       may not support it correctly
  *
  * @example
  * @code{.c}
@@ -171,8 +173,26 @@ SOFTWARE.
  * aparse_arg_subparser("config", config_subargs, handle_config, "Config subparser", config, port, name);
  * @endcode
  */
-#   define aparse_arg_subparser(name, subargs, handle, help, data_struct, ...) \
-       aparse_arg_subparser_impl(name, subargs, handle, help, (int[])__aparse_offsetofs(data_struct, __VA_ARGS__), __aparse_count_args(__VA_ARGS__))
+#   define aparse_arg_subparser( \
+        name, \
+        subargs, \
+        handle, \
+        buffer, \
+        size, \
+        help, \
+        data_struct, \
+        ...) \
+       aparse_arg_subparser_impl( \
+               (name), \
+               (subargs), \
+               (handle), \
+               (buffer), \
+               (size), \
+               (help), \
+               (int[]) \
+                    __aparse_offsetofs(data_struct, __VA_ARGS__), \
+                    __aparse_count_args(__VA_ARGS__) \
+        )
 #else
 #   pragma message("Warning: This compiler wasn't conformed to __VA_ARGS__ in C standard")
 #endif
@@ -393,6 +413,11 @@ struct aparse_arg_s
      * - Defines the number of offset-size pairs in @ref data_layout.
      */
     int size;
+             
+    /**
+     * @brief Pointer to the variable where the parsed value will be stored.
+     */
+    void* ptr;
 
     /**
      * @brief Type-specific data fields.
@@ -406,10 +431,6 @@ struct aparse_arg_s
          * @brief Argument-only fields (used when `type` include `APARSE_ARG_TYPE_ARGUMENT`).
          */
         struct {
-             /**
-             * @brief Pointer to the variable where the parsed value will be stored.
-             */
-            void* ptr;
             /**
              * @brief Desired size of the array arguments
              */
@@ -452,6 +473,11 @@ struct aparse_arg_s
              * @endcode
              */
             int* data_layout;
+
+            /**
+             * @brief The size of \p data_layout
+             */
+            int layout_size;
         };
     };
 };
@@ -484,8 +510,7 @@ enum aparse_status_e
     APARSE_STATUS_INVALID_TYPE,         /**< Argument type is invalid or mismatched. */
     APARSE_STATUS_INVALID_SIZE,         /**< Argument size is invalid for its type. */
 
-    APARSE_STATUS_LAYOUT_SMALL,         /**< The provided layout is too small */
-    APARSE_STATUS_LAYOUT_NONCONTIG,     /**< The layout is non-contiguous, which is unsupported */
+    APARSE_STATUS_INVALID_LAYOUT,       /**< The layout is invalid */
 
     APARSE_STATUS_ALLOC_FAILURE,        /**< Memory allocation failed. */
     APARSE_STATUS_UNHANDLED,            /**< Unhandled type of argument. */
@@ -521,8 +546,7 @@ typedef enum aparse_status_e aparse_status;
  * | ::APARSE_STATUS_NULL_POINTER       | `current_arg`          | `NULL`                 | Invalid NULL pointer in user argument definition. |
  * | ::APARSE_STATUS_INVALID_TYPE       | `current_arg`          | `NULL`                 | Type mismatch in argument definition.             |
  * | ::APARSE_STATUS_INVALID_SIZE       | `current_arg`          | `arg_size`             | Invalid size field in argument definition.        |
- * | ::APARSE_STATUS_LAYOUT_SMALL       | `current_arg`          | `index`                | The layout was too small for current argument     |
- * | ::APARSE_STATUS_LAYOUT_NONCONTIG   | `current_arg`          | `index`                | The layout was non-contiguous                     |
+ * | ::APARSE_STATUS_INVALID_LAYOUT     | `current_arg`          | `index`                | The layout was invalid at index                   |
  * | ::APARSE_STATUS_ALLOC_FAILURE      | `NULL`                 | `NULL`                 | Memory allocation failed inside parser.           |
  * | ::APARSE_STATUS_UNHANDLED          | `current_arg`          | `NULL`                 | An unhandled type of argument.                    |
  *
@@ -608,11 +632,22 @@ extern const char* __aparse_progname;
  *
  * @return Constructed ::aparse_arg definition.
  */
-APARSE_INLINE aparse_arg aparse_arg_option(char* shortopt, char* longopt, void* dest, int size, aparse_arg_types type, char* help) {
+APARSE_INLINE aparse_arg aparse_arg_option(
+        char* shortopt, 
+        char* longopt, 
+        void* dest, 
+        int size, 
+        aparse_arg_types type, 
+        char* help) 
+{
     return (aparse_arg){
-        .shortopt = shortopt, .longopt = longopt,
-        .type = type | APARSE_ARG_TYPE_ARGUMENT, 
-        .ptr = dest, .size = size, .help = help,
+        .shortopt = shortopt, 
+        .longopt = longopt,
+        .type = type | 
+            APARSE_ARG_TYPE_ARGUMENT, 
+        .ptr = dest, 
+        .size = size, 
+        .help = help,
     };
 }
 
@@ -630,9 +665,17 @@ APARSE_INLINE aparse_arg aparse_arg_option(char* shortopt, char* longopt, void* 
  *
  * @return A fully constructed ::aparse_arg definition for numeric positional arguments.
  */
-APARSE_INLINE aparse_arg aparse_arg_number(char* name, void* dest, int size, aparse_arg_types type, char* help) {
+APARSE_INLINE aparse_arg aparse_arg_number(
+        char* name, 
+        void* dest, 
+        int size, 
+        aparse_arg_types type, 
+        char* help) 
+{
     return (aparse_arg){
-        .longopt = name, .ptr = dest, .size = size, 
+        .longopt = name, 
+        .ptr = dest, 
+        .size = size, 
         .help = help,
         .type = type | 
             APARSE_ARG_TYPE_POSITIONAL | 
@@ -655,9 +698,15 @@ APARSE_INLINE aparse_arg aparse_arg_number(char* name, void* dest, int size, apa
  *
  * @note If @p size is 0, `dest` will be assigned with the string of argument (`const char*`)
  */
-APARSE_INLINE aparse_arg aparse_arg_string(char* name, void* dest, int size, char* help) {
+APARSE_INLINE aparse_arg aparse_arg_string(
+        char* name, 
+        void* dest, 
+        int size, 
+        char* help) {
     return (aparse_arg) {
-        .longopt = name, .ptr = dest, .size=size,
+        .longopt = name, 
+        .ptr = dest, 
+        .size = size,
         .help = help,
         .type = APARSE_ARG_TYPE_STRING |
             APARSE_ARG_TYPE_POSITIONAL |
@@ -675,9 +724,11 @@ APARSE_INLINE aparse_arg aparse_arg_string(char* name, void* dest, int size, cha
  * mytool test ...
  * @endcode
  *
- * @param name          Subcommand name (e.g. "build", "test").
+ * @param name           Subcommand name (e.g. "build", "test").
  * @param subargs        Argument table for the subparser.
  * @param handle         Function pointer to the subcommand handler.
+ * @param buffer         Pointer to a buffer described by data_layout
+ * @param size           Size of the buffer
  * @param help           Optional help string for this subparser.
  * @param data_layout    Pointer to custom data layout.
  * @param layout_size    Size of the data layout array.
@@ -686,15 +737,26 @@ APARSE_INLINE aparse_arg aparse_arg_string(char* name, void* dest, int size, cha
  *
  * @note The parser core ignores this type during matching, but it is used
  *       by help and usage generators to represent subcommands.
+ * @note If `ptr` is not provided, aparse will automatically allocate a buffer based on the provided layout, enabling seamless usage without manual memory setup.
  * @attention Generally recommended to use ::aparse_arg_subparser
  */
 APARSE_INLINE aparse_arg aparse_arg_subparser_impl(
-    char* name,aparse_arg* subargs, void (*handle)(void*), 
-    char* help, int* data_layout, int layout_size
+    char* name,
+    aparse_arg* subargs, 
+    void (*handle)(void*),
+    void *buffer, 
+    int size,
+    char* help, 
+    int* data_layout, int layout_size
 ) {
     return (aparse_arg) {
-        .longopt = name, .subargs = subargs, .handler = handle,
-        .data_layout = data_layout, .size = layout_size,
+        .longopt = name, 
+        .subargs = subargs, 
+        .handler = handle,
+        .data_layout = data_layout, 
+        .layout_size = layout_size,
+        .ptr = buffer, 
+        .size = size,
         .help = help,
         .type = APARSE_ARG_TYPE_POSITIONAL // parser doesn't care 'bout this, but help constructor DOES care
     };
@@ -712,7 +774,11 @@ APARSE_INLINE aparse_arg aparse_arg_subparser_impl(
  * @return A constructed ::aparse_arg definition representing the root parser.
  */
 APARSE_INLINE aparse_arg aparse_arg_parser(char* name, aparse_arg* subparsers) {
-    return (aparse_arg){.longopt = name, .subargs = subparsers, .type = APARSE_ARG_TYPE_POSITIONAL};
+    return (aparse_arg){
+        .longopt = name, 
+        .subargs = subparsers, 
+        .type = APARSE_ARG_TYPE_POSITIONAL
+    };
 }
 
 /**

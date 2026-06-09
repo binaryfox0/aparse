@@ -91,7 +91,11 @@ static int spawn_process(const test_entry test)
 }
 
 static aparse_status last_status = APARSE_STATUS_OK;
-static void error_callback(const aparse_status status, const void* field1, const void* field2, void *userdata)
+static void error_callback(
+        const aparse_status status, 
+        const void* field1, 
+        const void* field2, 
+        void *userdata)
 {
     aparse_prog_error("%s: %s", __func__, aparse_error_msg(status));
     if(status == APARSE_STATUS_NULL_POINTER)
@@ -133,7 +137,8 @@ int main(int argc, char** argv)
         aparse_arg_end_marker
     };
     aparse_arg command[] = {
-        aparse_arg_subparser("copy", copy_subargs, copy_command, 0, copy_data, src, dest),
+        aparse_arg_subparser("copy", copy_subargs, copy_command, 
+                0, 0, 0, copy_data, src, dest),
         aparse_arg_end_marker
     };
     aparse_arg args_1[] = {
