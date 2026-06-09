@@ -87,7 +87,7 @@ typedef struct aparse_context
 
 typedef struct aparse_help_before // nah idk what to name it.
 {
-    char* str;
+    const char* str;
     bool freeable;
 } aparse_help_before;
 
@@ -187,7 +187,7 @@ static void aparse_print_usage(void);
 // Miscellaneous
 static aparse_arg* aparse_argv_matching(const char* argv, aparse_arg* args);
 static const char* aparse_extract_exename(const char* argv0);
-static char* aparse_construct_optional_argument(char* longopt);
+static char* aparse_construct_optional_argument(const char* longopt);
 static aparse_context aparse_fill_context(const aparse_context *prev, aparse_arg* args, bool is_sublayer);
 static int aparse_get_terminal_width(void);
 
@@ -1150,7 +1150,8 @@ static void aparse_print_usage_before(aparse_arg* root, aparse_arg* target) {
     for (size_t i = 0; i < strs.size; i++) {
         aparse_help_before* entry = &aparse_list_get(&strs, i, aparse_help_before);
         printf("%s ", entry->str);
-        if (entry->freeable) free(entry->str);
+        if (entry->freeable) 
+            free((void*)entry->str);
     }
 
     aparse_list_free(&strs);
@@ -1249,7 +1250,7 @@ static const char* aparse_extract_exename(const char* argv0)
     return last_slash ? last_slash + 1 : argv0;
 }
 
-static char* aparse_construct_optional_argument(char* longopt)
+static char* aparse_construct_optional_argument(const char* longopt)
 {
     if(!longopt)
         return 0;
