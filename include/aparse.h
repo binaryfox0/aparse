@@ -207,40 +207,59 @@ SOFTWARE.
 #define __aparse_fprintf_impl(fp, fmt, ...) fprintf(fp, fmt, ##__VA_ARGS__)
 #define __aparse_fprintf(fp, fmt, ...) __aparse_fprintf_impl(fp, fmt, ##__VA_ARGS__)
 
-#define __aparse_info_label __aparse_ansies("\x1b[1;34m") "info" __aparse_ansies("\x1b[0m")
-#define __aparse_warn_label __aparse_ansies("\x1b[1;33m") "warn" __aparse_ansies("\x1b[0m") 
+#define __aparse_debug_label __aparse_ansies("\x1b[1;36m") "debug" __aparse_ansies("\x1b[0m")
+#define __aparse_info_label  __aparse_ansies("\x1b[1;34m") "info"  __aparse_ansies("\x1b[0m")
+#define __aparse_warn_label  __aparse_ansies("\x1b[1;33m") "warn"  __aparse_ansies("\x1b[0m") 
 #define __aparse_error_label __aparse_ansies("\x1b[1;31m") "error" __aparse_ansies("\x1b[0m") 
 /** @endcond */
 
 /**
- * @brief Print informational message to stdout, with color if supported
+ * @brief Print informational message to stdere, with color if supported
  *
  * @param fmt to a null-terminated multibyte string specifying how to interpret the data
  * @param ... specifying data to print. Undefined behaviour if type mismatched, discarded if extraneous
  *
  * @note Should be used after calling \ref aparse_parse, otherwise program name will be `(null)`
  */
-#define aparse_prog_info(fmt, ...) __aparse_fprintf(stderr, "%s: " __aparse_info_label ": " fmt "\n", __aparse_progname, ##__VA_ARGS__)
+#define aparse_prog_debug(fmt, ...) \
+    __aparse_fprintf(stderr, "%s: " __aparse_debug_label ": " fmt "\n", \
+            __aparse_progname, ##__VA_ARGS__)
 
 /**
- * @brief Print warning message to stdout, with color if supported
+ * @brief Print informational message to stdere, with color if supported
  *
  * @param fmt to a null-terminated multibyte string specifying how to interpret the data
  * @param ... specifying data to print. Undefined behaviour if type mismatched, discarded if extraneous
  *
  * @note Should be used after calling \ref aparse_parse, otherwise program name will be `(null)`
  */
-#define aparse_prog_warn(fmt, ...) __aparse_fprintf(stderr, "%s: " __aparse_warn_label ": " fmt "\n", __aparse_progname, ##__VA_ARGS__)
+#define aparse_prog_info(fmt, ...) \
+    __aparse_fprintf(stderr, "%s: " __aparse_info_label ": " fmt "\n", \
+            __aparse_progname, ##__VA_ARGS__)
 
 /**
- * @brief Print error message to stdout, with color if supported
+ * @brief Print warning message to stderr, with color if supported
  *
  * @param fmt to a null-terminated multibyte string specifying how to interpret the data
  * @param ... specifying data to print. Undefined behaviour if type mismatched, discarded if extraneous
  *
  * @note Should be used after calling \ref aparse_parse, otherwise program name will be `(null)`
  */
-#define aparse_prog_error(fmt, ...) __aparse_fprintf(stderr, "%s: " __aparse_error_label ": " fmt "\n", __aparse_progname, ##__VA_ARGS__)
+#define aparse_prog_warn(fmt, ...) \
+    __aparse_fprintf(stderr, "%s: " __aparse_warn_label ": " fmt "\n", \
+            __aparse_progname, ##__VA_ARGS__)
+
+/**
+ * @brief Print error message to stderr, with color if supported
+ *
+ * @param fmt to a null-terminated multibyte string specifying how to interpret the data
+ * @param ... specifying data to print. Undefined behaviour if type mismatched, discarded if extraneous
+ *
+ * @note Should be used after calling \ref aparse_parse, otherwise program name will be `(null)`
+ */
+#define aparse_prog_error(fmt, ...) \
+    __aparse_fprintf(stderr, "%s: " __aparse_error_label ": " fmt "\n", \
+            __aparse_progname, ##__VA_ARGS__)
 
 
 #ifdef __cplusplus

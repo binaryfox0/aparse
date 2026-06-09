@@ -63,11 +63,14 @@ SOFTWARE.
 
 #define min(a, b) ((a < b) ? (a) : (b))
 
-#define aparse_error_label __aparse_ansies("\x1b[1;31m") "error" __aparse_ansies("\x1b[0m") ": "
-#define aparse_library_info(fmt, ...) printf("aparse: " __aparse_ansies("\x1b[1;34m") "info" __aparse_ansies("\x1b[0m") ": " fmt "\n", ##__VA_ARGS__)
-#define aparse_library_warn(fmt, ...) printf("aparse: " __aparse_ansies("\x1b[1;33m") "warn" __aparse_ansies("\x1b[0m") ": " fmt "\n", ##__VA_ARGS__)
-#define aparse_library_error(fmt, ...) fprintf(stderr, "aparse: "  aparse_error_label fmt "\n", ##__VA_ARGS__)
-#define aparse_program_error(fmt, ...) fprintf(stderr, "%s: "  aparse_error_label fmt "\n", __aparse_progname, ##__VA_ARGS__)
+#define aparse_library_debug(fmt, ...) \
+    __aparse_fprintf(stderr, "aparse: " __aparse_debug_label ": " fmt "\n", ##__VA_ARGS__)
+#define aparse_library_info(fmt, ...) \
+    __aparse_fprintf(stderr, "aparse: " __aparse_info_label  ": " fmt "\n", ##__VA_ARGS__)
+#define aparse_library_warn(fmt, ...) \
+    __aparse_fprintf(stderr, "aparse: " __aparse_warn_label  ": " fmt "\n", ##__VA_ARGS__)
+#define aparse_library_error(fmt, ...) \
+    __aparse_fprintf(stderr, "aparse: " __aparse_error_label ": "fmt "\n", ##__VA_ARGS__)
 #define aparse_raise_error(type, field1, field2) { err_cb((type), (field1), (field2), err_userdata); return APARSE_STATUS_FAILURE; }
 
 // The command handler for subparser will be called after the main parsing completed
@@ -824,7 +827,7 @@ static void aparse_default_error_callback(
         case APARSE_STATUS_UNKNOWN_ARGUMENT:
         {
             const aparse_list* args = field1;
-            fprintf(stderr, "%s: " aparse_error_label "unrecognized arguments: ", __aparse_progname);
+            fprintf(stderr, "%s: " __aparse_error_label ": unrecognized arguments: ", __aparse_progname);
             char** unknowns = args->ptr;
             for (size_t i = 0; i < args->size; i++, unknowns++) {
                 if (i > 0) fprintf(stderr, ", ");
@@ -837,7 +840,7 @@ static void aparse_default_error_callback(
         {
             const aparse_arg* arg = field1;
             const int expected_count = *(int*)field2;
-            aparse_program_error("option '%s' expected %d argument.",
+            aparse_prog_error("option '%s' expected %d argument.",
                 arg->flags & APARSE_ARG_SHORT_MATCH ? arg->shortopt : arg->longopt,
                 expected_count);
             break;
@@ -846,7 +849,7 @@ static void aparse_default_error_callback(
         {
             const aparse_arg* arg = field1;
             const char* cargv = field2;
-            aparse_program_error("invalid %s '%s'",
+            aparse_prog_error("invalid %s '%s'",
                 arg->type & APARSE_ARG_TYPE_FLOAT ? "float" : "integer", cargv);
             break;
         }
@@ -874,7 +877,7 @@ static void aparse_default_error_callback(
         {
             const aparse_list* args = field2;
             aparse_print_usage();
-            fprintf(stderr, "%s: " aparse_error_label "the following arguments are required: ", __aparse_progname);
+            fprintf(stderr, "%s: " __aparse_error_label ": the following arguments are required: ", __aparse_progname);
             int printed = 0;
             aparse_arg* a = *(aparse_arg**)args->ptr;
             for (size_t i = 0; i < args->size; i++, a++) {
@@ -892,7 +895,7 @@ static void aparse_default_error_callback(
             const aparse_list* args = field1;
             const char* cargv = field2;
             aparse_print_usage();
-            fprintf(stderr, "%s: " aparse_error_label "invalid choice: '%s' (choose from ", __aparse_progname, cargv);
+            fprintf(stderr, "%s: " __aparse_error_label ": invalid choice: '%s' (choose from ", __aparse_progname, cargv);
             aparse_arg* a = args->ptr;
             for(size_t i = 0; i < args->size; i++, a++)
                 fprintf(stderr, "%s%s", a->longopt, i < (args->size - 1) ? ", " : "");
