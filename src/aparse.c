@@ -433,7 +433,8 @@ static aparse_status aparse__process_argument(
 {
     if (!arg->ptr)
     {
-        err_cb(APARSE_STATUS_NULL_POINTER, arg, 0, err_userdata);
+        err_cb(APARSE_STATUS_NULL_POINTER, 
+                arg, 0, err_userdata);
         return APARSE_STATUS_OK; // continue
     }
     if (arg->size <= 0 && !(arg->type & APARSE_ARG_TYPE_STRING))
@@ -535,7 +536,8 @@ static aparse_status aparse__process_argument(
     case APARSE_ARG_TYPE_FLOAT:
     {
         int errnum = aparse_process_float(argv, arg);
-        switch(errnum) {
+        switch(errnum) 
+        {
         case -1:
             aparse_raise_error(APARSE_STATUS_INVALID_VALUE, arg, argv);
         case -2:

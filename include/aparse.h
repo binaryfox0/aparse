@@ -189,7 +189,7 @@ SOFTWARE.
                (buffer), \
                (size), \
                (help), \
-               (int[]) \
+               (size_t[]) \
                     __aparse_offsetofs(data_struct, __VA_ARGS__), \
                     __aparse_count_args(__VA_ARGS__) \
         )
@@ -577,7 +577,11 @@ typedef enum aparse_status_e aparse_status;
  * - `const int*         size          `: The invalid size of `current_arg`. It can be `current_arg.size` or `current_arg.element_size`
  * - `const int*         index         `: The base index of current entry inside `current_arg.data_layout`
  */
-typedef void (*aparse_error_callback)(const aparse_status status, const void* field1, const void* field2, void *userdata);
+typedef void (*aparse_error_callback)(
+        const aparse_status status, 
+        const void* field1, 
+        const void* field2, 
+        void *userdata);
 
 /** @cond INTERNAL */
 extern const char* __aparse_progname;
@@ -655,7 +659,7 @@ APARSE_INLINE aparse_arg aparse_arg_option(
         const char* shortopt, 
         const char* longopt, 
         void* dest, 
-        const int size, 
+        const size_t size, 
         const aparse_arg_types type, 
         const char* help) 
 {
@@ -687,7 +691,7 @@ APARSE_INLINE aparse_arg aparse_arg_option(
 APARSE_INLINE aparse_arg aparse_arg_number(
         const char* name, 
         void* dest, 
-        const int size, 
+        const size_t size, 
         const aparse_arg_types type, 
         const char* help) 
 {
@@ -720,7 +724,7 @@ APARSE_INLINE aparse_arg aparse_arg_number(
 APARSE_INLINE aparse_arg aparse_arg_string(
         const char* name, 
         void* dest, 
-        const int size, 
+        const size_t size, 
         const char* help) 
 {
     return (aparse_arg) {
@@ -761,14 +765,14 @@ APARSE_INLINE aparse_arg aparse_arg_string(
  * @attention Generally recommended to use ::aparse_arg_subparser
  */
 APARSE_INLINE aparse_arg aparse_arg_subparser_impl(
-    const char* name,
-    aparse_arg* subargs, 
-    void (*handle)(void*),
-    void *buffer, 
-    const int size,
-    const char* help, 
-    const int* data_layout, 
-    const int layout_size
+        const char* name,
+        aparse_arg* subargs, 
+        void (*handle)(void*),
+        void *buffer, 
+        const size_t size,
+        const char* help, 
+        const size_t *data_layout, 
+        const size_t layout_size
 ) {
     return (aparse_arg) {
         .longopt = name, 

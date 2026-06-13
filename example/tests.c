@@ -56,7 +56,9 @@ const char* status_string(const aparse_status status)
 }
 
 // Return value: the process status
-static int spawn_process(const test_entry test)
+static int spawn_process(
+        const test_entry test,
+        const int flag_verbose)
 {
 #ifndef APARSE_PLATFORM_WIN32
     char path[PATH_MAX] = {0};
@@ -66,10 +68,11 @@ static int spawn_process(const test_entry test)
         return -1;
     }
 
-    char *argv[3] = {0};
+    char *argv[4] = {0};
     argv[0] = path;
     argv[1] = test.name;
-    argv[2] = 0;
+    argv[2] = flag_verbose ? "--verbose" : 0;
+    argv[3] = 0;
 
     pid_t pid = -1;
     if(posix_spawn(&pid, path, 0, 0, argv, 0) == -1)
@@ -97,11 +100,8 @@ static void error_callback(
         const void* field2, 
         void *userdata)
 {
-    aparse_prog_error("%s: %s", __func__, aparse_error_msg(status));
-    if(status == APARSE_STATUS_NULL_POINTER)
-    {
-        aparse_prog_info("\"%s\" had a null pointer", ((aparse_arg*)field1)->longopt);
-    }
+    if(*(int*)userdata)
+        aparse_prog_error("%s: %s", __func__, aparse_error_msg(status));
     last_status = status;
 }
 
@@ -169,7 +169,8 @@ int main(int argc, char** argv)
             args_1, APARSE_STATUS_MISSING_POSITIONAL},
         {"invalid-cmd", 2, (char*[]){"tests", "a"},
             args_1, APARSE_STATUS_INVALID_SUBCOMMAND},
-        {.name="valid-cmd", .argc=4, .argv=(char*[]){"tests", "copy", "fox", "binary"},
+        {.name="valid-cmd", .argc=4, 
+            .argv=(char*[]){"tests", "copy", "fox", "binary"},
             args_1, APARSE_STATUS_OK},    
         {.name="bignum", .argc=2, .argv=(char*[]){"tests", "0"},
                 bignum_args, APARSE_STATUS_UNHANDLED},
@@ -189,21 +190,25 @@ int main(int argc, char** argv)
         int success_count = 0, failed_count = 0;
         for(int i = 0; i < tests_count; i++)
         {
-            int status = spawn_process(tests[i]);
+            int status = spawn_process(tests[i], flag_verbose);
             int expected_status = tests[i].expected_status;
             int fail = status != expected_status;
     
-            aparse_prog_info("test %d (\"%s\"): %s", i + 1, tests[i].name, fail ? "failed" : "passed");
+            aparse_prog_info("test %d (\"%s\"): %s", i + 1, 
+                    tests[i].name, fail ? "failed" : "passed");
             if(fail) {
                 failed_count++;
-                aparse_prog_info("expected: %s, got: %s", status_string(expected_status), status_string(status));
+                aparse_prog_info("expected: %s, got: %s", 
+                        status_string(expected_status), 
+                        status_string(status));
             } else {
                 success_count++;
             }
         }
 
         printf("\n");
-        aparse_prog_info("summary: %d success, %d failed", success_count, failed_count);
+        aparse_prog_info("summary: %d success, %d failed", 
+                success_count, failed_count);
     } else {
         int test_idx = -1;
         for(int i = 0; i < tests_count; i++)
@@ -224,8 +229,9 @@ int main(int argc, char** argv)
         }
 
         test_entry entry = tests[test_idx];
-        aparse_set_error_callback(error_callback, 0);
-        aparse_parse(entry.argc, entry.argv, entry.args, 0, 0);
+        aparse_set_error_callback(error_callback, &flag_verbose);
+        aparse_parse(entry.argc, entry.argv, 
+                entry.args, 0, 0);
         return subcommand_status == 0 && subcommand_status != -1 ? 255 : last_status;
     }
     
