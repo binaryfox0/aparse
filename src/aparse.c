@@ -48,6 +48,7 @@ SOFTWARE.
 
 #define INDENT 2 // indent/space
 #define MAX_ARG_STR 19
+#define APARSE__MAX_DEPTH 16
 
 // aparse_arg flags
 // optional  | has_equal   APARSE_ARG_EQUAL_VAL
@@ -76,6 +77,8 @@ SOFTWARE.
 
 #define aparse__foreach(child, parent) \
     for(aparse_arg *child = parent->subargs; aparse_arg_nend(child); child++)
+#define aparse__tillend(element, start) \
+    for(aparse_arg *element = start; aparse_arg_nend(element); element++)
 
 // The command handler for subparser will be called after the main parsing completed
 typedef struct aparse_dispatch {
@@ -85,12 +88,13 @@ typedef struct aparse_dispatch {
 
 typedef struct aparse_context
 {
-    int *idx_ptr;
-    int positional_count;
-    int positional_processed;
+    int idx;
     aparse_list *unknown;
     aparse_list *dispatch;
     int layer_idx;
+
+    aparse_arg *stack[APARSE__MAX_DEPTH];
+    int top;
 } aparse__context_t;
 
 typedef struct aparse_help_before // nah idk what to name it.
@@ -172,9 +176,8 @@ static void aparse_destroy_data(
         const aparse_arg* args, 
         char* composed);
 // Failure handling
-static int aparse_process_failure(
-        const int status, 
-        const aparse__context_t *context, aparse_arg* args);
+static int aparse__check_missing(
+        aparse_arg* args);
 
 static void aparse_default_error_callback(
         const aparse_status status, 
@@ -204,13 +207,6 @@ static void aparse_print_usage(void);
 static aparse_arg* aparse_argv_matching(const char* argv, aparse_arg* args);
 static const char* aparse_extract_exename(const char* argv0);
 static size_t aparse__option_value_index(const char* opt);
-static void aparse__context_init(
-        aparse__context_t *ctx,
-        const aparse__context_t *prev, 
-        aparse_arg* args);
-
-static int aparse__count_positional(
-        aparse_arg *args);
 
 static int aparse_get_terminal_width(void);
 
@@ -240,17 +236,16 @@ int aparse_parse(
     unknown_list.itemsz = sizeof(const char*);
     dispatch_list.itemsz = sizeof(aparse__dispatch_entry_t);
 
-    ctx.idx_ptr = &idx;
+    ctx.idx = 1;
     ctx.unknown = &unknown_list;
     ctx.dispatch = &dispatch_list;
-    ctx.positional_count = aparse__count_positional(args);
     
     if(!err_cb)
         aparse_set_error_callback(0, 0);
-
-    ret = aparse_process_failure(
-                aparse__parse_impl(argc, argv, args, &ctx), 
-                &ctx, args);
+    
+    ret = aparse__parse_impl(argc, argv, args, &ctx);
+    if(ret == APARSE_STATUS_OK)
+        ret = aparse__check_missing(args);
     
     if(ret == APARSE_STATUS_OK && unknown_list.size > 0)
     {
@@ -359,9 +354,11 @@ static int aparse__parse_impl(
         aparse_arg* args, 
         aparse__context_t* ctx)
 {
-    int *idx = ctx->idx_ptr;
+    int *idx = &ctx->idx;
     if(!args)
         return APARSE_STATUS_OK;
+
+    
     current_args = args;
     while (*idx < argc) {
         int found = 0;
@@ -370,8 +367,8 @@ static int aparse__parse_impl(
 
         aparse_arg* ptr = aparse_argv_matching(cargv, args);
         if(ptr) {
-            if(aparse_arg_is_positional(ptr)) {
-                ctx->positional_processed++;
+            if(aparse_arg_is_positional(ptr)) 
+            {
                 ptr->flags |= APARSE_ARG_PROCESSED;
                 if(aparse_arg_is_argument(ptr)) 
                 {
@@ -565,12 +562,12 @@ int aparse__process_parser(
         aparse_arg* arg,
         aparse__context_t* ctx)
 {
-    aparse_arg *ptr2 = 0;
+    aparse_status ret = APARSE_STATUS_OK;
+    aparse_arg *subparser = 0;
     int found2 = 0;
     uint8_t* buffer = 0;
     int invalid_idx = 0;
     int min_size = 0;
-    aparse__context_t new_ctx = {0};
 
     if(!arg->subargs)
     {
@@ -579,9 +576,9 @@ int aparse__process_parser(
         return APARSE_STATUS_OK;
     }
     
-    ptr2 = arg->subargs;
-    for(; aparse_arg_nend(ptr2); ptr2++) {
-            if((found2 = !strcmp(cargv, ptr2->longopt)))
+    subparser = arg->subargs;
+    for(; aparse_arg_nend(subparser); subparser++) {
+            if((found2 = !strcmp(cargv, subparser->longopt)))
                 break;
         }
     if(!found2) {
@@ -592,45 +589,41 @@ int aparse__process_parser(
                 &arg_list, cargv);
     }
 
-    if(!ptr2->subargs)
+    if(!subparser->subargs)
     {
         aparse_list_add(ctx->dispatch, 
-                (aparse__dispatch_entry_t[1]){{ptr2, 0}});
+                (aparse__dispatch_entry_t[1]){{subparser, 0}});
         return APARSE_STATUS_OK;
     }
 
-    if(!aparse_verify_layout(ptr2, &invalid_idx))
-        aparse_raise_error(APARSE_STATUS_INVALID_LAYOUT, ptr2, &invalid_idx);
+    if(!aparse_verify_layout(subparser, &invalid_idx))
+        aparse_raise_error(APARSE_STATUS_INVALID_LAYOUT, subparser, &invalid_idx);
     min_size =
-            ptr2->data_layout[(ptr2->layout_size - 1) * 2] + 
-            ptr2->data_layout[(ptr2->layout_size - 1) * 2 + 1];
-    if(!ptr2->ptr)
+            subparser->data_layout[(subparser->layout_size - 1) * 2] + 
+            subparser->data_layout[(subparser->layout_size - 1) * 2 + 1];
+    if(!subparser->ptr)
     {
         buffer = calloc(min_size, sizeof(*buffer));
         if(!buffer)
             aparse_raise_error(APARSE_STATUS_ALLOC_FAILURE, 0, 0);
     } else {
-        if(ptr2->size < min_size)
-            aparse_raise_error(APARSE_STATUS_INVALID_SIZE, ptr2, &ptr2->size);
-        buffer = ptr2->ptr;
+        if(subparser->size < min_size)
+            aparse_raise_error(APARSE_STATUS_INVALID_SIZE, subparser, &subparser->size);
+        buffer = subparser->ptr;
     }
 
-    aparse_fill_args_dest(ptr2, buffer);
+    aparse_fill_args_dest(subparser, buffer);
 
-    aparse__context_init(&new_ctx, ctx, 
-            ptr2->subargs);
-    if(aparse_process_failure(aparse__parse_impl(argc, argv, 
-        ptr2->subargs, &new_ctx), 
-                &new_ctx, ptr2->subargs)) 
-    {
-        free(buffer);
-        return APARSE_STATUS_FAILURE;
-    }
-    if(!ptr2->handler)
+    ret = aparse__parse_impl(argc, argv, subparser->subargs, ctx);
+    if(ret == APARSE_STATUS_OK)
+        ret = aparse__check_missing(subparser->subargs);
+
+    if(!subparser->handler || ret != APARSE_STATUS_OK)
         free(buffer);
     else
-        aparse_list_add(ctx->dispatch, (aparse__dispatch_entry_t[1]){{ptr2, buffer}});
-    return APARSE_STATUS_OK;
+        aparse_list_add(ctx->dispatch, 
+                (aparse__dispatch_entry_t[1]){{subparser, buffer}});
+    return ret;
 }
 
 int aparse_process_optional(
@@ -639,7 +632,7 @@ int aparse_process_optional(
         aparse_arg* arg,
         aparse__context_t *ctx)
 {
-    int *idx = ctx->idx_ptr;
+    int *idx = &ctx->idx;
     if(aparse_type_compare(arg, APARSE_ARG_TYPE_BOOL))
     {
         if(arg->flags & APARSE_ARG_PROCESSED)
@@ -726,7 +719,7 @@ static int aparse_process_array(
         aparse_arg* arg, 
         aparse__context_t *ctx)
 {
-    int *idx = ctx->idx_ptr;
+    int *idx = &ctx->idx;
     aparse_list* dest = arg->ptr;
     int remaining = 0, increment = 0;
     void *ptr = 0;
@@ -892,27 +885,21 @@ static void aparse_destroy_data(
 }
 
 // 0 no error, 1 error (just for cleaning up)
-static int aparse_process_failure(
-        const int status, 
-        const aparse__context_t* context, 
+static int aparse__check_missing(
         aparse_arg* args) 
 {
-    // Stop parsing and return
-    if (status == APARSE_STATUS_FAILURE)
-        return APARSE_STATUS_FAILURE;
-
-    // Not using != here as if an array paramater was specified, the positional_count have already been -= 1
-    if (context->positional_count > context->positional_processed) {
-        // prepare required argument list
-        aparse_list required_args = {.itemsz = sizeof(aparse_arg*)};
-        for (; aparse_arg_nend(args); args++) {
-            if (aparse_arg_is_positional(args) && !(args->flags & APARSE_ARG_PROCESSED)) {
-                aparse_list_add(&required_args, &args);
-            }
-        }
-        err_cb(APARSE_STATUS_MISSING_POSITIONAL, current_args, &required_args, err_userdata);
-        aparse_list_free(&required_args);
-        return APARSE_STATUS_FAILURE;
+    aparse_list missing_args = {.itemsz = sizeof(aparse_arg*)};
+    aparse__tillend(item, args)
+    {
+        if(aparse_arg_is_positional(item) &&
+                !(item->flags & APARSE_ARG_PROCESSED))
+            aparse_list_add(&missing_args, &item);
+    }
+    if(missing_args.size > 0)
+    {
+        aparse_raise_error(APARSE_STATUS_MISSING_POSITIONAL, 
+                current_args, &missing_args);
+        aparse_list_free(&missing_args);
     }
 
     return APARSE_STATUS_OK;
@@ -981,13 +968,12 @@ static void aparse_default_error_callback(
             aparse_print_usage();
             fprintf(stderr, "%s: " __aparse_error_label ": the following arguments are required: ", __aparse_progname);
             int printed = 0;
-            aparse_arg* a = *(aparse_arg**)args->ptr;
-            for (size_t i = 0; i < args->size; i++, a++) {
-                
-                if (aparse_arg_is_positional(a) && !(a->flags & APARSE_ARG_PROCESSED)) {
-                    if (printed++ > 0) fprintf(stderr, ", ");
-                    fprintf(stderr, "%s", a->longopt);
-                }
+            for (size_t i = 0; i < args->size; i++) 
+            {
+                aparse_arg *item = aparse_list_get(args, i, aparse_arg*);
+                if (printed++ > 0) 
+                    fprintf(stderr, ", ");
+                fprintf(stderr, "%s", item->longopt);
             }
             fprintf(stderr, "\n");
             break;
@@ -1426,32 +1412,6 @@ static size_t aparse__option_value_index(const char* longopt)
         idx++;
 
     return idx;
-}
-
-static void aparse__context_init(
-        aparse__context_t *ctx,
-        const aparse__context_t* prev, 
-        aparse_arg* args)
-{
-    ctx->idx_ptr = prev->idx_ptr;
-    ctx->positional_count = aparse__count_positional(args);
-    ctx->unknown = prev->unknown;
-    ctx->dispatch = prev->dispatch;
-    ctx->layer_idx = prev->layer_idx + 1;
-    // aparse_library_info("%d", positional_count);
-}
-
-static int aparse__count_positional(
-        aparse_arg *args)
-{
-    int count = 0;
-    for(; aparse_arg_nend(args); args++) {
-        if(aparse_arg_is_positional(args))
-            count++;
-        if(args->type & APARSE_ARG_TYPE_ARRAY && args->size == 0)
-            count--;
-    }
-    return count;
 }
 
 static int aparse_get_terminal_width(void)
