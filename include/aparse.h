@@ -353,7 +353,7 @@ enum aparse_arg_types_e
      *
      * Can be applied to a type value to ignore modifier flags.
      */
-    APARSE_ARG_TYPE_BITMASK = 0b111
+    APARSE_ARG_TYPE_BITMASK = 0x7
 };
 
 /** @typedef aparse_arg_types
@@ -431,7 +431,7 @@ struct aparse_arg_s
      * **3. Subparser arguments (`APARSE_ARG_TYPE_SUBPARSER`)**
      * - Defines the number of offset-size pairs in @ref data_layout.
      */
-    int size;
+    size_t size;
              
     /**
      * @brief Pointer to the variable where the parsed value will be stored.
@@ -453,11 +453,11 @@ struct aparse_arg_s
             /**
              * @brief Desired size of the array arguments
              */
-            int array_size;
+            size_t array_size;
             /**
              * @brief Size of each element for array arguments.
              */
-            int element_size;
+            size_t element_size;
         };
         // For subparsers/subcommands
         struct {
@@ -491,12 +491,12 @@ struct aparse_arg_s
              * };
              * @endcode
              */
-            const int *data_layout;
+            const size_t *data_layout;
 
             /**
              * @brief The size of \p data_layout
              */
-            int layout_size;
+            size_t layout_size;
         };
     };
 };
@@ -825,10 +825,10 @@ APARSE_INLINE aparse_arg aparse_arg_parser(
 APARSE_INLINE aparse_arg aparse_arg_array(
         const char* name, 
         void* dest, 
-        const int size, 
-        const int array_size, 
+        const size_t size, 
+        const size_t array_size, 
         const aparse_arg_types type, 
-        const int element_size, 
+        const size_t element_size, 
         const char* help) {
     return (aparse_arg){
         .longopt = name, .ptr = dest, .size = size,
@@ -888,7 +888,13 @@ static inline bool aparse_arg_nend(const aparse_arg* arg) {
  * @note Errors and warnings can be intercepted using ::aparse_set_error_callback.
  * @note If `dispatch_list == NULL`, dispatched function will be executed immedieately after parsing complete
  */
-extern int aparse_parse(const int argc, char* const * argv, aparse_arg* args, aparse_list* dispatch_list_out, const char* program_desc);
+aparse_status aparse_parse(
+        const int argc, 
+        char* const * argv, 
+        aparse_arg* args, 
+        aparse_list* dispatch_list_out, 
+        const char* program_desc
+);
 
 /**
  * @brief Dispatch all queued handle
@@ -937,9 +943,20 @@ extern void aparse_dispatch_free(aparse_list* dispatch_list);
  *
  * @note Passing `NULL` as @p cb using the library default callback.
  */
-extern void aparse_set_error_callback(const aparse_error_callback cb, void* userdata);
+void aparse_set_error_callback(
+        const aparse_error_callback cb, 
+        void* userdata);
 
-extern const char* aparse_error_msg(const aparse_status status);
+/**
+ * @brief Returns a human-readable error message forstatus code.
+ * @param status The status code.
+ * @return A pointer to a constant null-terminated string if existed,
+ *         otherwise a "Unknown error" string
+ *
+ * @warning The returned pointer must not be modified or freed.
+ */
+const char* aparse_error_msg(const aparse_status status);
+const char* aparse_error_msg(const aparse_status status);
 
 #ifdef __cplusplus 
 }

@@ -2,17 +2,35 @@
 #include <aparse.h>
 #include <math.h>
 
-static int result_only = 0;
+static int g_result_only = 0;
 typedef struct
 {
     int a;
     int b;
 } add_payload_t;
+
+int count_digits(int n)
+{
+    int digits = 0;
+    while(n > 0)
+    {
+        digits++;
+        n /= 10;
+    }
+    return digits;
+}
+
 void add_command(void *args)
 {
     add_payload_t *p = args;
-    aparse_prog_info("result: %d + %d = %d", 
-            p->a, p->b, p->a + p->b);
+    if(!g_result_only)
+    {
+        aparse_prog_info("result: %d + %d = %d", 
+                p->a, p->b, p->a + p->b);
+    } else {
+        aparse_prog_info("result: %d", 
+                p->a + p->b);
+    }
 }
 
 void poly_surf_command(void *args)
@@ -20,7 +38,7 @@ void poly_surf_command(void *args)
     aparse_list list = *(aparse_list*)args;
     double *points = list.ptr;
     size_t point_count = list.size / 2;
-    int dig_count = floor(log10(point_count)) + 1;
+    int dig_count = count_digits(point_count);
     double total_area = 0;
     if(list.size % 2 != 0)
     {
@@ -35,7 +53,7 @@ void poly_surf_command(void *args)
 
     for(size_t i = 0; i < point_count; i++)
     {
-        if(!result_only)
+        if(!g_result_only)
         {
             aparse_prog_info("%*zu: (%.6f, %.6f)", 
                     dig_count, i + 1, points[i * 2], points[i * 2 + 1]);
@@ -50,7 +68,7 @@ void poly_surf_command(void *args)
         return;
     }
     
-    if(result_only)
+    if(g_result_only)
     {
         aparse_prog_info("vertices order: %s", 
                 total_area > 0 ? "counter-clockwise" : "clockwise");
@@ -64,7 +82,7 @@ void poly_perm_command(void *args)
     aparse_list list = *(aparse_list*)args;
     double *points = list.ptr;
     size_t point_count = list.size / 2;
-    int dig_count = floor(log10(point_count)) + 1;
+    int dig_count = count_digits(point_count);
     double perm = 0;
     if(list.size % 2 != 0)
     {
@@ -86,7 +104,7 @@ void poly_perm_command(void *args)
         dx = points[i * 2] - points[j * 2];
         dy = points[i * 2 + 1] - points[j * 2 + 1];
        
-        if(!result_only)
+        if(!g_result_only)
         {
             aparse_prog_info("%*zu: (%.6f, %.6f)", 
                     dig_count, i + 1, points[i * 2], points[i * 2 + 1]);
@@ -129,7 +147,7 @@ int main(int argc, char **argv)
     };
     aparse_arg main_args[] = {
         aparse_arg_parser("command", subcommand_list),
-        aparse_arg_option(0, "--result-only", &result_only, sizeof(result_only),
+        aparse_arg_option(0, "--result-only", &g_result_only, sizeof(g_result_only),
                 APARSE_ARG_TYPE_BOOL, "Only print the result"),
         aparse_arg_end_marker
     };
