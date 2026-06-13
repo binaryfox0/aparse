@@ -29,23 +29,32 @@ SOFTWARE.
 
 #define min(a, b) ((a) < (b) ? (a) : (b))
 
-int aparse_list_new(aparse_list* list, size_t init_size, size_t var_size) {
-    if(!var_size)
+int aparse_list_new(
+        aparse_list* list, 
+        const size_t init_size, 
+        const size_t var_size) 
+{
+    if(!list || var_size == 0)
         return 0;
-    list->var_size = var_size;
+    list->itemsz = var_size;
     list->size = 0;
     list->ptr = NULL;
     list->capacity = 0;
-    return init_size > 0 ? aparse_list_resize(list, init_size) : 0;
+    return init_size > 0 ? aparse_list_resize(list, init_size) : 1;
 }
 
-int aparse_list_resize(aparse_list* list, size_t new_size) {
-    if (!list->var_size)
-        return 1;
+int aparse_list_resize(
+        aparse_list* list, 
+        const size_t new_size) 
+{
+    if (!list || !list->itemsz)
+        return 0;
 
-    if (new_size) {
-        void* tmp = realloc(list->ptr, new_size * list->var_size);
-        if (!tmp) return 1;
+    if (new_size) 
+    {
+        void* tmp = realloc(list->ptr, new_size * list->itemsz);
+        if (!tmp) 
+            return 0;
         list->ptr = tmp;
         list->capacity = new_size;
         list->size = min(list->size, new_size);
@@ -55,28 +64,32 @@ int aparse_list_resize(aparse_list* list, size_t new_size) {
         list->capacity = 0;
         list->size = 0;
     }
-    return 0;
+    return 1;
 }
 
-int aparse_list_add(aparse_list* list, const void* data) {
-    if (!list->var_size)
-        return 1;
+int aparse_list_add(
+        aparse_list* list, 
+        const void* data) 
+{
+    if (!list->itemsz)
+        return 0;
 
-    if (list->size >= list->capacity) {
+    if (list->size >= list->capacity) 
+    {
         size_t new_capacity = list->capacity ? list->capacity * 2 : 4;
-        if (aparse_list_resize(list, new_capacity))
-            return 1;
+        if (!aparse_list_resize(list, new_capacity))
+            return 0;
     }
 
-    memcpy((uint8_t*)list->ptr + list->size * list->var_size, data, list->var_size);
+    memcpy((uint8_t*)list->ptr + list->size * list->itemsz, data, list->itemsz);
     list->size++;
-    return 0;
+    return 1;
 }
 
-void aparse_list_free(aparse_list* list) {
+void aparse_list_free(aparse_list* list) 
+{
+    if(!list)
+        return;
     free(list->ptr);
-    list->ptr = NULL;
-    list->size = 0;
-    list->capacity = 0;
-    list->var_size = 0;
+    memset(list, 0, sizeof(*list));
 }

@@ -28,21 +28,95 @@ SOFTWARE.
 #include <stdint.h>
 #include <stddef.h>
 
+/**
+ * @brief Dynamic array container.
+ *
+ * Stores a contiguous sequence of fixed-size elements.
+ * Elements are copied into an internal buffer and can be
+ * accessed by index.
+ */
 typedef struct aparse_list
 {
+    /** Pointer to the underlying element storage. */
     void* ptr;
+
+    /** Number of elements currently stored. */
     size_t size;
+
+    /** Total number of elements that can be stored without resizing. */
     size_t capacity;
-    size_t var_size;
+
+    /** Size of each element in bytes. */
+    size_t itemsz;
 } aparse_list;
 
+/**
+ * @brief Retrieves an element from the list.
+ *
+ * @param list Pointer to the list.
+ * @param idx Zero-based element index.
+ * @param type Element type.
+ *
+ * @return The element at @p idx cast to @p type.
+ *
+ * @warning No bounds checking is performed.
+ */
 #define aparse_list_get(list, idx, type) (*((type*)(list)->ptr + (idx)))
 
-extern int aparse_list_new(aparse_list* list, size_t init_size, size_t var_size);
-extern int aparse_list_resize(aparse_list* list, size_t new_size);
+/**
+ * @brief Initializes a list.
+ *
+ * Allocates storage for a dynamic array capable of holding
+ * at least @p init_size elements.
+ *
+ * @param list List to initialize.
+ * @param init_size Initial capacity in elements.
+ * @param itemsz Size of each element in bytes.
+ *
+ * @return 1 on success, 0 on failure.
+ */
+int aparse_list_new(
+        aparse_list* list,
+        const size_t init_size,
+        const size_t itemsz);
 
-extern int aparse_list_add(aparse_list* list, const void* data);
+/**
+ * @brief Resizes the list storage.
+ *
+ * Changes the list capacity to hold at least @p new_size elements.
+ *
+ * @param list List to resize.
+ * @param new_size New capacity in elements.
+ *
+ * @return 1 on success, 0 on failure.
+ */
+int aparse_list_resize(
+        aparse_list* list,
+        const size_t new_size);
 
-extern void aparse_list_free(aparse_list* list);
+/**
+ * @brief Appends an element to the list.
+ *
+ * Copies the item pointed to by @p data into the list.
+ * The list may be automatically resized if additional
+ * capacity is required.
+ *
+ * @param list Destination list.
+ * @param data Pointer to the element to append.
+ *
+ * @return 1 on success, 0 on failure.
+ */
+int aparse_list_add(
+        aparse_list* list,
+        const void* data);
+
+/**
+ * @brief Releases all resources owned by the list.
+ *
+ * Frees the list's storage and resets its fields.
+ *
+ * @param list List to free.
+ */
+void aparse_list_free(aparse_list* list);
 
 #endif

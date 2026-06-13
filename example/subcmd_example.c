@@ -3,6 +3,18 @@
 #include <math.h>
 
 static int result_only = 0;
+typedef struct
+{
+    int a;
+    int b;
+} add_payload_t;
+void add_command(void *args)
+{
+    add_payload_t *p = args;
+    aparse_prog_info("result: %d + %d = %d", 
+            p->a, p->b, p->a + p->b);
+}
+
 void poly_surf_command(void *args)
 {
     aparse_list list = *(aparse_list*)args;
@@ -86,11 +98,25 @@ void poly_perm_command(void *args)
 
 int main(int argc, char **argv)
 {
-    aparse_arg poly_surf_args[] = {
+    aparse_arg add_args[] =
+    {
+        aparse_arg_number("a", 0, sizeof(int), 
+                APARSE_ARG_TYPE_SIGNED, "First integer in equation"),
+        aparse_arg_number("b", 0, sizeof(int), 
+                APARSE_ARG_TYPE_SIGNED, "Second integer in equation"),
+        aparse_arg_end_marker
+    };
+
+    aparse_arg poly_surf_args[] = 
+    {
         aparse_arg_array("points", 0, sizeof(aparse_list), 0, APARSE_ARG_TYPE_FLOAT, sizeof(double), "List of points in format x, y"),
         aparse_arg_end_marker
     };
     aparse_arg subcommand_list[] = {
+        aparse_arg_subparser("add", add_args, add_command,
+                0, 0,
+                "Add two integer together",
+                add_payload_t, a, b),
         aparse_arg_subparser_impl("poly-surf", poly_surf_args, poly_surf_command,
                 0, 0,
                 "Calculate a polygon surface area from given list of points", 
