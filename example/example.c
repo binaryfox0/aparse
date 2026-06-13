@@ -43,6 +43,7 @@ int main(int argc, char** argv) {
         sizeof(copy_subargs), sizeof(main_args),
         sizeof(copy_subargs) + sizeof(main_args)
     );
+    aparse_prog_debug("This is a debug text");
     aparse_prog_info("This is an info text");
     aparse_prog_warn("This is a warning text");
     aparse_prog_error("This is an error text");

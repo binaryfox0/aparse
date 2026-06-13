@@ -35,20 +35,20 @@ static inline uint32_t fnv1a(const char *s)
 
 const char* status_string(const aparse_status status)
 {
-    const char* strings[] = {
-        "APARSE_STATUS_OK",
-        "APARSE_STATUS_FAILURE",
-        "APARSE_STATUS_UNKNOWN_ARGUMENT",
-        "APARSE_STATUS_INVALID_VALUE",
-        "APARSE_STATUS_OVERFLOW",
-        "APARSE_STATUS_UNDERFLOW",
-        "APARSE_STATUS_MISSING_POSITIONAL",
-        "APARSE_STATUS_INVALID_SUBCOMMAND",
-        "APARSE_STATUS_NULL_POINTER",
-        "APARSE_STATUS_INVALID_TYPE",
-        "APARSE_STATUS_INVALID_SIZE",
-        "APARSE_STATUS_ALLOC_FAILURE",
-        "APARSE_STATUS_UNHANDLED",
+    const char* strings[__APARSE_STATUS_ENUM_END__] = {
+        [APARSE_STATUS_OK]                  = "APARSE_STATUS_OK",
+        [APARSE_STATUS_FAILURE]             = "APARSE_STATUS_FAILURE",
+        [APARSE_STATUS_UNKNOWN_ARGUMENT]    = "APARSE_STATUS_UNKNOWN_ARGUMENT",
+        [APARSE_STATUS_INVALID_VALUE]       = "APARSE_STATUS_INVALID_VALUE",
+        [APARSE_STATUS_OVERFLOW]            = "APARSE_STATUS_OVERFLOW",
+        [APARSE_STATUS_UNDERFLOW]           = "APARSE_STATUS_UNDERFLOW",
+        [APARSE_STATUS_MISSING_POSITIONAL]  = "APARSE_STATUS_MISSING_POSITIONAL",
+        [APARSE_STATUS_INVALID_SUBCOMMAND]  = "APARSE_STATUS_INVALID_SUBCOMMAND",
+        [APARSE_STATUS_NULL_POINTER]        = "APARSE_STATUS_NULL_POINTER",
+        [APARSE_STATUS_INVALID_TYPE]        = "APARSE_STATUS_INVALID_TYPE",
+        [APARSE_STATUS_INVALID_SIZE]        = "APARSE_STATUS_INVALID_SIZE",
+        [APARSE_STATUS_ALLOC_FAILURE]       = "APARSE_STATUS_ALLOC_FAILURE",
+        [APARSE_STATUS_UNHANDLED]           = "APARSE_STATUS_UNHANDLED",
     };
     if(status < 0 || status >= __APARSE_STATUS_ENUM_END__)
         return 0;
@@ -120,11 +120,14 @@ void copy_command(void* data)
 
 int main(int argc, char** argv)
 {
-    int force = 0;
+    int flag_verbose = 0;
     const char* test_name = 0;
     aparse_arg main_args[] = {
-        aparse_arg_string("test_name", &test_name, 0, "the test to perform"),
-        aparse_arg_option("-f", "--force", &force, sizeof(force), APARSE_ARG_TYPE_BOOL, "Force running the test whether system endian"),
+        aparse_arg_string("test_name", &test_name, 
+                0, "the test to perform"),
+        aparse_arg_option("-v", "--verbose", 
+                &flag_verbose, sizeof(flag_verbose),
+                APARSE_ARG_TYPE_BOOL, "Toggle verbosity"),
         aparse_arg_end_marker
     };
     if(aparse_parse(argc, argv, main_args, 0, 0) != APARSE_STATUS_OK)
@@ -181,14 +184,6 @@ int main(int argc, char** argv)
     };
     const int tests_count = sizeof(tests) / sizeof(tests[0]);
 
-    if(!(*(unsigned char *)&(uint16_t){1}) && !force)
-    {
-        aparse_prog_error("this is only usable on little-endian machine");
-        aparse_prog_info("the order of bytes is difference, affect the hash");
-        aparse_prog_info("specify \"--force\" to force the test to run, some may fail");
-        return 0;
-    }
- 
     if(!strcmp(test_name, "all"))
     {
         int success_count = 0, failed_count = 0;

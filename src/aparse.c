@@ -86,7 +86,7 @@ typedef struct aparse_context
     aparse_list unknown;
     aparse_list* dispatch_list;
     bool is_sublayer;
-} aparse_context;
+} aparse_context_t;
 
 typedef struct aparse_help_before // nah idk what to name it.
 {
@@ -118,13 +118,14 @@ static int aparse_parse_private(
         char * const * argv, 
         aparse_arg* args, 
         int* index, 
-        aparse_context* context
+        aparse_context_t* context
 );
 
 // Processing each type of argument
 static int aparse_process_argument(
         const char* argv, 
-        const aparse_arg* arg);
+        const aparse_arg* arg,
+        aparse_context_t *context);
 
 static int aparse_process_parser(
         const int argc, 
@@ -132,7 +133,7 @@ static int aparse_process_parser(
         char* const* argv, 
         aparse_arg* arg, 
         int* index, 
-        aparse_context* context
+        aparse_context_t* context
 );
 
 static int aparse_process_optional(
@@ -153,7 +154,9 @@ static int aparse_process_array(
         int* index);
 
 // For aparse_arg is subparsers and have proper data_layout & layout_size
-static int aparse_evaluate_size(const aparse_arg* arg);
+static int aparse_evaluate_size(
+        const aparse_arg* arg);
+
 static int aparse_verify_layout(
         const aparse_arg *arg, 
         int *invalid_idx);
@@ -162,11 +165,13 @@ static int aparse_fill_args_dest(
         const aparse_arg* arg, 
         uint8_t *buffer);
 
-static void aparse_destroy_data(const aparse_arg* args, char* composed);
+static void aparse_destroy_data(
+        const aparse_arg* args, 
+        char* composed);
 // Failure handling
 static int aparse_process_failure(
         const int status, 
-        const aparse_context *context, aparse_arg* args);
+        const aparse_context_t *context, aparse_arg* args);
 
 static void aparse_default_error_callback(
         const aparse_status status, 
@@ -191,12 +196,16 @@ static void aparse_print_usage(void);
 static aparse_arg* aparse_argv_matching(const char* argv, aparse_arg* args);
 static const char* aparse_extract_exename(const char* argv0);
 static char* aparse_construct_optional_argument(const char* longopt);
-static aparse_context aparse_fill_context(const aparse_context *prev, aparse_arg* args, bool is_sublayer);
+static aparse_context_t aparse_fill_context(const aparse_context_t *prev, aparse_arg* args, bool is_sublayer);
 static int aparse_get_terminal_width(void);
 
 
-int aparse_parse(const int argc, char* const * argv,
-        aparse_arg* args, aparse_list* dispatch_list_out, const char* program_desc)
+int aparse_parse(
+        const int argc, 
+        char* const * argv,
+        aparse_arg* args, 
+        aparse_list* dispatch_list_out, 
+        const char* program_desc)
 {
     if(!argv)
         return APARSE_STATUS_FAILURE;
@@ -209,7 +218,7 @@ int aparse_parse(const int argc, char* const * argv,
         return APARSE_STATUS_OK;
 
     aparse_list_new(&dispatch_list, 0, sizeof(aparse_dispatch));
-    aparse_context context = aparse_fill_context(0, args, false);
+    aparse_context_t context = aparse_fill_context(0, args, false);
     context.dispatch_list = &dispatch_list;
     if(!err_cb)
         aparse_set_error_callback(0, 0);
@@ -303,7 +312,7 @@ const char* aparse_error_msg(const aparse_status status)
 }
 
 // --------------------------------------- PRIVATE ---------------------------------------
-static int aparse_parse_private(const int argc, char* const * argv, aparse_arg* args, int* index, aparse_context* context)
+static int aparse_parse_private(const int argc, char* const * argv, aparse_arg* args, int* index, aparse_context_t* context)
 {
     if(!args)
         return APARSE_STATUS_OK;
@@ -321,7 +330,7 @@ static int aparse_parse_private(const int argc, char* const * argv, aparse_arg* 
                 if(aparse_arg_is_argument(ptr)) {
                     if(ptr->type & APARSE_ARG_TYPE_ARRAY ?
                         APARSE_STATUS_OK != aparse_process_array(argc, argv, ptr, index) :
-                        APARSE_STATUS_OK != aparse_process_argument(cargv, ptr)
+                        APARSE_STATUS_OK != aparse_process_argument(cargv, ptr, context)
                     )
                         return APARSE_STATUS_FAILURE;
                 } else  {
@@ -357,7 +366,11 @@ static int aparse_parse_private(const int argc, char* const * argv, aparse_arg* 
     return 0;
 }
 
-static int aparse_process_argument(const char* argv, const aparse_arg *arg) {
+static int aparse_process_argument(
+        const char* argv, 
+        const aparse_arg *arg,
+        aparse_context_t *ctx) 
+{
     if (!arg->ptr)
     {
         err_cb(APARSE_STATUS_NULL_POINTER, arg, 0, err_userdata);
@@ -403,10 +416,10 @@ static int aparse_process_argument(const char* argv, const aparse_arg *arg) {
         if (p[0] == '0') {
             switch(tolower(p[1]))
             {
-            case 'x': base = 16; p += 2; break;
-            case 'b': base = 2 ; p += 2; break;
-            case 'o': base = 8 ; p += 2; break;
-            default:  base = 8;  p++; break;
+                case 'x': base = 16; p += 2; break;
+                case 'b': base = 2 ; p += 2; break;
+                case 'o': base = 8 ; p += 2; break;
+                default:  base = 8;  p++; break;
             }
         }
 
@@ -488,14 +501,14 @@ int aparse_process_parser(
         char* const* argv,
         aparse_arg* arg,
         int* index, 
-        aparse_context* context)
+        aparse_context_t* context)
 {
     aparse_arg *ptr2 = 0;
     int found2 = 0;
     uint8_t* buffer = 0;
     int invalid_idx = 0;
     int min_size = 0;
-    aparse_context new_context = {0};
+    aparse_context_t new_context = {0};
 
     if(!arg->subargs)
     {
@@ -527,10 +540,9 @@ int aparse_process_parser(
     min_size =
             ptr2->data_layout[(ptr2->layout_size - 1) * 2] + 
             ptr2->data_layout[(ptr2->layout_size - 1) * 2 + 1];
-    aparse_library_warn("%d", min_size);
     if(!ptr2->ptr)
     {
-        buffer = malloc(min_size);
+        buffer = calloc(min_size, sizeof(*buffer));
         if(!buffer)
             aparse_raise_error(APARSE_STATUS_ALLOC_FAILURE, 0, 0);
     } else {
@@ -606,29 +618,30 @@ int aparse_process_float(const char* argv, const aparse_arg* arg)
             return -3;
     }
 
-    switch (arg->size) {
-    case sizeof(float):
-        if (abs_val > FLT_MAX && abs_val != INFINITY)
-            return -2;
-        if (num != 0.0L && abs_val < FLT_MIN)
-            return -3;
-        *(float *)arg->ptr = (float)num;
-        break;
+    switch (arg->size) 
+    {
+        case sizeof(float):
+            if (abs_val > FLT_MAX && abs_val != INFINITY)
+                return -2;
+            if (num != 0.0L && abs_val < FLT_MIN)
+                return -3;
+            *(float *)arg->ptr = (float)num;
+            break;
 
-    case sizeof(double):
-        if (abs_val > DBL_MAX && abs_val != INFINITY)
-            return -2;
-        if (num != 0.0L && abs_val < DBL_MIN)
-            return -3;
-        *(double *)arg->ptr = (double)num;
-        break;
+        case sizeof(double):
+            if (abs_val > DBL_MAX && abs_val != INFINITY)
+                return -2;
+            if (num != 0.0L && abs_val < DBL_MIN)
+                return -3;
+            *(double *)arg->ptr = (double)num;
+            break;
 
-    case sizeof(long double):
-        *(long double *)arg->ptr = num;
-        break;
+        case sizeof(long double):
+            *(long double *)arg->ptr = num;
+            break;
 
-    default:
-        return -4;
+        default:
+            return -4;
     }
     return 0;
 }
@@ -790,7 +803,7 @@ static void aparse_destroy_data(const aparse_arg* args, char* composed)
 }
 
 // 0 no error, 1 error (just for cleaning up)
-static int aparse_process_failure(const int status, const aparse_context* context, aparse_arg* args) {
+static int aparse_process_failure(const int status, const aparse_context_t* context, aparse_arg* args) {
     // Stop parsing and return
     if (status == APARSE_STATUS_FAILURE)
         return APARSE_STATUS_FAILURE;
@@ -1267,7 +1280,7 @@ static char* aparse_construct_optional_argument(const char* longopt)
     return out;
 }
 
-static aparse_context aparse_fill_context(const aparse_context* prev, aparse_arg* args, bool is_sublayer)
+static aparse_context_t aparse_fill_context(const aparse_context_t* prev, aparse_arg* args, bool is_sublayer)
 {
     int positional_count = 0;
     for(; aparse_arg_nend(args); args++) {
@@ -1277,7 +1290,7 @@ static aparse_context aparse_fill_context(const aparse_context* prev, aparse_arg
             positional_count--;
     }
     // aparse_library_info("%d", positional_count);
-    aparse_context out = { 
+    aparse_context_t out = { 
         positional_count, 0, 
         {0, 0, 0},
         prev ? prev->dispatch_list : 0,
