@@ -92,6 +92,10 @@ if(APARSE_BUILD_EXAMPLE)
 
     add_executable(subcmd example/subcmd_example.c)
     target_link_libraries(subcmd PRIVATE aparse)
+    if(UNIX)
+        target_link_libraries(subcmd PRIVATE m)
+    endif()
+    
     target_add_asan(subcmd)
 
     add_executable(tests example/tests.c)

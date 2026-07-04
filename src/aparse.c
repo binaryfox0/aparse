@@ -529,7 +529,7 @@ static aparse_status aparse__process_argument(
 
         if (have_sign) {
             uint8_t* msb = (uint8_t*)arg->ptr + (APARSE_LITTLE_ENDIAN ? arg->size - 1 : 0);
-            *msb = (*msb & ~0x80) | (((int64_t)num < 0) ? 0x80 : 0);
+            *msb = (uint8_t)((*msb & ~0x80) | (((int64_t)num < 0) ? 0x80 : 0));
         }
         break;
     }
@@ -820,7 +820,7 @@ static int aparse_verify_layout(
         offset = layout[i * 2];
         size   = layout[i * 2 + 1];
 
-        if (offset < 0 || size <= 0 ||
+        if (size == 0 ||
             offset < prev_offset + prev_size ||
             aparse_evaluate_size(arg_ptr) > size)
         {
@@ -1383,7 +1383,7 @@ static aparse_arg* aparse_argv_matching(
         {
             size_t longlen = strlen(sa->longopt);
             if (strncmp(argv, sa->longopt, longlen) == 0) {
-                sa->flags &= ~APARSE_ARG_SHORT_MATCH;
+                sa->flags &= (uint8_t)~APARSE_ARG_SHORT_MATCH;
                 if (argv[longlen] == '\0') {
                     return sa;
                 } else if (argv[longlen] == '=') {

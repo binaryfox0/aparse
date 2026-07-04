@@ -107,7 +107,7 @@ static void error_callback(
 
 typedef struct copy_data { char* src, *dest; } copy_data;
 static int subcommand_status = -1;
-void copy_command(void* data)
+static void copy_command(void* data)
 {
     copy_data* ptr = data;
     uint32_t src_hash = fnv1a(ptr->src);
