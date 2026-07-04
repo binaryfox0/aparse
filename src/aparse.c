@@ -164,7 +164,7 @@ static aparse_status aparse_process_array(
 static size_t aparse_evaluate_size(
         const aparse_arg* arg);
 
-static int aparse_verify_layout(
+static bool aparse_verify_layout(
         const aparse_arg *arg, 
         int *invalid_idx);
 
@@ -601,20 +601,23 @@ static aparse_status aparse__process_parser(
         return APARSE_STATUS_OK;
     }
 
-    if(!aparse_verify_layout(subparser, &invalid_idx))
-        aparse_raise_error(APARSE_STATUS_INVALID_LAYOUT, subparser, &invalid_idx);
-    min_size =
-            subparser->data_layout[(subparser->layout_size - 1) * 2] + 
-            subparser->data_layout[(subparser->layout_size - 1) * 2 + 1];
-    if(!subparser->ptr)
-    {
-        buffer = calloc(min_size, sizeof(*buffer));
-        if(!buffer)
-            aparse_raise_error(APARSE_STATUS_ALLOC_FAILURE, 0, 0);
-    } else {
-        if(subparser->size < min_size)
-            aparse_raise_error(APARSE_STATUS_INVALID_SIZE, subparser, &subparser->size);
-        buffer = subparser->ptr;
+    if(subparser->size != 0)
+    {   
+        if(!aparse_verify_layout(subparser, &invalid_idx))
+            aparse_raise_error(APARSE_STATUS_INVALID_LAYOUT, subparser, &invalid_idx);
+        min_size =
+                subparser->data_layout[(subparser->layout_size - 1) * 2] + 
+                subparser->data_layout[(subparser->layout_size - 1) * 2 + 1];
+        if(!subparser->ptr)
+        {
+            buffer = calloc(min_size, sizeof(*buffer));
+            if(!buffer)
+                aparse_raise_error(APARSE_STATUS_ALLOC_FAILURE, 0, 0);
+        } else {
+            if(subparser->size < min_size)
+                aparse_raise_error(APARSE_STATUS_INVALID_SIZE, subparser, &subparser->size);
+            buffer = subparser->ptr;
+        }
     }
 
     aparse_fill_args_dest(subparser, buffer);
@@ -785,7 +788,7 @@ static size_t aparse_evaluate_size(
     return arg->size;
 }
 
-static int aparse_verify_layout(
+static bool aparse_verify_layout(
         const aparse_arg *arg,
         int *invalid_idx)
 {
@@ -795,13 +798,13 @@ static int aparse_verify_layout(
 
     const aparse_arg *arg_ptr = arg->subargs;
 
-    if (!arg->subargs && !layout && layout_size == 0)
-        return APARSE_STATUS_OK;
+    if (!arg->subargs && !layout)
+        return false;
 
     if (!arg->subargs || !layout || layout_size <= 0)
     {
         *invalid_idx = -1;
-        return APARSE_STATUS_FAILURE;
+        return false;
     }
 
     for(size_t i = 0; i < layout_size; i++)
@@ -825,7 +828,7 @@ static int aparse_verify_layout(
             aparse_evaluate_size(arg_ptr) > size)
         {
             *invalid_idx = (int)i;
-            return APARSE_STATUS_FAILURE;
+            return false;
         }
 
         prev_offset = offset;
@@ -836,10 +839,10 @@ static int aparse_verify_layout(
     if (!aparse_arg_nend(arg_ptr))
     {
         *invalid_idx = -1;
-        return APARSE_STATUS_FAILURE;
+        return false;
     }
 
-    return APARSE_STATUS_OK;
+    return true;
 }
 
 static int aparse_fill_args_dest(
