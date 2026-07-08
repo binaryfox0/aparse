@@ -77,74 +77,46 @@ SOFTWARE.
 
 #   define __aparse_cat_impl(a, b) a##b
 
-#   define __aparse_count_args_impl( \
-        _1, _2, _3, _4, _5, _6, _7, _8, \
+#   define __aparse_count_args2( \
+        _0, _1, _2, _3, _4, _5, _6, _7, _8, \
         _9, _10,_11,_12,_13,_14,_15,_16,N,...) N
+#   define __aparse_count_args1(...) \
+    __aparse_count_args2(dummy, ##__VA_ARGS__, \
+        16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0)
+#define __aparse_count_args(...) \
+    __aparse_count_args1(__VA_ARGS__)
 
-#   define __aparse_map_1(m, a, x)               m(a, x)
-#   define __aparse_map_2(m, a, x, ...)          m(a, x), __aparse_map_1(m, a, __VA_ARGS__)
-#   define __aparse_map_3(m, a, x, ...)          m(a, x), __aparse_map_2(m, a, __VA_ARGS__)
-#   define __aparse_map_4(m, a, x, ...)          m(a, x), __aparse_map_3(m, a, __VA_ARGS__)
-#   define __aparse_map_5(m, a, x, ...)          m(a, x), __aparse_map_4(m, a, __VA_ARGS__)
-#   define __aparse_map_6(m, a, x, ...)          m(a, x), __aparse_map_5(m, a, __VA_ARGS__)
-#   define __aparse_map_7(m, a, x, ...)          m(a, x), __aparse_map_6(m, a, __VA_ARGS__)
-#   define __aparse_map_8(m, a, x, ...)          m(a, x), __aparse_map_7(m, a, __VA_ARGS__)
-#   define __aparse_map_9(m, a, x, ...)          m(a, x), __aparse_map_8(m, a, __VA_ARGS__)
-#   define __aparse_map_10(m, a, x, ...)         m(a, x), __aparse_map_9(m, a, __VA_ARGS__)
-#   define __aparse_map_11(m, a, x, ...)         m(a, x), __aparse_map_10(m, a, __VA_ARGS__)
-#   define __aparse_map_12(m, a, x, ...)         m(a, x), __aparse_map_11(m, a, __VA_ARGS__)
-#   define __aparse_map_13(m, a, x, ...)         m(a, x), __aparse_map_12(m, a, __VA_ARGS__)
-#   define __aparse_map_14(m, a, x, ...)         m(a, x), __aparse_map_13(m, a, __VA_ARGS__)
-#   define __aparse_map_15(m, a, x, ...)         m(a, x), __aparse_map_14(m, a, __VA_ARGS__)
-#   define __aparse_map_16(m, a, x, ...)         m(a, x), __aparse_map_15(m, a, __VA_ARGS__)
+#   define __aparse_map_0(...)           0
+#   define __aparse_map_1(m, a, x)       m(a, x)
+#   define __aparse_map_2(m, a, x, ...)  m(a, x), __aparse_map_1(m, a, __VA_ARGS__)
+#   define __aparse_map_3(m, a, x, ...)  m(a, x), __aparse_map_2(m, a, __VA_ARGS__)
+#   define __aparse_map_4(m, a, x, ...)  m(a, x), __aparse_map_3(m, a, __VA_ARGS__)
+#   define __aparse_map_5(m, a, x, ...)  m(a, x), __aparse_map_4(m, a, __VA_ARGS__)
+#   define __aparse_map_6(m, a, x, ...)  m(a, x), __aparse_map_5(m, a, __VA_ARGS__)
+#   define __aparse_map_7(m, a, x, ...)  m(a, x), __aparse_map_6(m, a, __VA_ARGS__)
+#   define __aparse_map_8(m, a, x, ...)  m(a, x), __aparse_map_7(m, a, __VA_ARGS__)
+#   define __aparse_map_9(m, a, x, ...)  m(a, x), __aparse_map_8(m, a, __VA_ARGS__)
+#   define __aparse_map_10(m, a, x, ...) m(a, x), __aparse_map_9(m, a, __VA_ARGS__)
+#   define __aparse_map_11(m, a, x, ...) m(a, x), __aparse_map_10(m, a, __VA_ARGS__)
+#   define __aparse_map_12(m, a, x, ...) m(a, x), __aparse_map_11(m, a, __VA_ARGS__)
+#   define __aparse_map_13(m, a, x, ...) m(a, x), __aparse_map_12(m, a, __VA_ARGS__)
+#   define __aparse_map_14(m, a, x, ...) m(a, x), __aparse_map_13(m, a, __VA_ARGS__)
+#   define __aparse_map_15(m, a, x, ...) m(a, x), __aparse_map_14(m, a, __VA_ARGS__)
+#   define __aparse_map_16(m, a, x, ...) m(a, x), __aparse_map_15(m, a, __VA_ARGS__)
 
 #   define __aparse_offsetof_and_sizeof(s, m) offsetof(s, m), sizeof(((s*)0)->m )
 #   define __aparse_offsetofs(s, ...) { __aparse_expand(__aparse_map(__aparse_offsetof_and_sizeof, s, __VA_ARGS__)) }
-/** @endcond */
 
-/**
- * @brief Expands the arguments passed to a variadic macro.
- *
- * This macro simply returns its input list of arguments. It is useful
- * when forcing Doxygen or the preprocessor to fully expand nested variadic macros.
- *
- * @param ... Variadic arguments to expand.
- */
 #   define __aparse_expand(...) __VA_ARGS__
-
-/**
- * @brief Concatenate two tokens after macro expansion.
- *
- * This macro ensures proper token pasting in complex macro expressions.
- *
- * @param a First token
- * @param b Second token
- * @return Concatenation of a and b
- */
 #   define __aparse_cat(a, b) __aparse_cat_impl(a, b)
+#   define __aparse_map(m, a, ...) \
+    __aparse_cat(__aparse_map_, __aparse_count_args(__VA_ARGS__))(m, a, __VA_ARGS__)
 
-/**
- * @brief Count the number of arguments passed to a variadic macro (up to 16).
- *
- * This macro uses a helper implementation to determine the number of arguments
- * in a variadic macro call.
- *
- * @param ... Variadic list of arguments
- * @return Number of arguments passed
- */
-#   define __aparse_count_args(...) __aparse_count_args_impl(__VA_ARGS__, \
-        16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1)
+#   define __aparse_first_arg(a, ...) a
+#   define __aparse_not_first_arg(a, ...) __VA_ARGS__
 
-/**
- * @brief Map a macro `m(a, x)` over a variadic list of arguments.
- *
- * This is the public-facing helper; internally it expands to `__map_1` .. `__map_16`.
- * 
- * @param m Macro to apply to each element (must take two arguments: `a` and `x`)
- * @param a Extra argument passed to `m`
- * @param ... Variadic list of items to process
- */
-#   define __aparse_map(m, a, ...) __aparse_cat(__aparse_map_, __aparse_count_args(__VA_ARGS__))(m, a, __VA_ARGS__)
+
+/** @endcond */
 
 /**
  * @brief Create a subparser argument entry for @ref aparse_arg_s.
@@ -180,7 +152,6 @@ SOFTWARE.
         buffer, \
         size, \
         help, \
-        data_struct, \
         ...) \
        aparse_arg_subparser_impl( \
                (name), \
@@ -190,8 +161,10 @@ SOFTWARE.
                (size), \
                (help), \
                (size_t[]) \
-                    __aparse_offsetofs(data_struct, __VA_ARGS__), \
-                    __aparse_count_args(__VA_ARGS__) \
+                    __aparse_offsetofs( \
+                        __aparse_first_arg(__VA_ARGS__), \
+                        __aparse_not_first_arg(__VA_ARGS__)), \
+                __aparse_count_args(__aparse_not_first_arg(__VA_ARGS__)) \
         )
 #else
 #   pragma message("Warning: This compiler wasn't conformed to __VA_ARGS__ in C standard")

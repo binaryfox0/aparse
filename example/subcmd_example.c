@@ -114,6 +114,12 @@ void poly_perm_command(void *args)
     aparse_prog_info("total perimitter: %.6f", perm);
 }
 
+void nothing_command(void *args)
+{
+    (void)args;
+    aparse_prog_info("this do nothing, really");
+}
+
 int main(int argc, char **argv)
 {
     aparse_arg add_args[] =
@@ -130,19 +136,22 @@ int main(int argc, char **argv)
         aparse_arg_array("points", 0, sizeof(aparse_list), 0, APARSE_ARG_TYPE_FLOAT, sizeof(double), "List of points in format x, y"),
         aparse_arg_end_marker
     };
+    
     aparse_arg subcommand_list[] = {
         aparse_arg_subparser("add", add_args, add_command,
-                0, 0,
+                NULL, 0,
                 "Add two integer together",
                 add_payload_t, a, b),
-        aparse_arg_subparser_impl("poly-surf", poly_surf_args, poly_surf_command,
-                0, 0,
+        aparse_arg_subparser_impl("poly-surf", poly_surf_args, 
+                poly_surf_command, NULL, 0,
                 "Calculate a polygon surface area from given list of points", 
                 (size_t[]){0, sizeof(aparse_list)}, 1),
-        aparse_arg_subparser_impl("poly-perm", poly_surf_args, poly_perm_command, 
-                0, 0,
+        aparse_arg_subparser_impl("poly-perm", poly_surf_args, 
+                poly_perm_command, NULL, 0,
                 "Calculate a polygon perimitter length from given list of points", 
                 (size_t[]){0, sizeof(aparse_list)}, 1),
+        aparse_arg_subparser("nothing", NULL, nothing_command,
+                NULL, 0, "This do nothing literally"),
         aparse_arg_end_marker
     };
     aparse_arg main_args[] = {
