@@ -297,9 +297,9 @@ int aparse_dispatch_contain(
         if(!list[i].args->longopt)
             continue;
         if(!strcmp(list[i].args->longopt, name))
-            return 0;
+            return 1;
     }
-    return 1;
+    return 0;
 }
 
 void aparse_dispatch_free(
