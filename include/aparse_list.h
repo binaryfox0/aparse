@@ -54,14 +54,14 @@ typedef struct aparse_list
  * @brief Retrieves an element from the list.
  *
  * @param list Pointer to the list.
- * @param idx Zero-based element index.
  * @param type Element type.
+ * @param idx Zero-based element index.
  *
  * @return The element at @p idx cast to @p type.
  *
  * @warning No bounds checking is performed.
  */
-#define aparse_list_get(list, idx, type) (*((type*)(list)->ptr + (idx)))
+#define aparse_list_get(list, type, idx) (*((type*)(list)->ptr + (idx)))
 
 /**
  * @brief Initializes a list.

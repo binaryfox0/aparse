@@ -9,7 +9,7 @@ typedef struct
     int b;
 } add_payload_t;
 
-int count_digits(int n)
+static int count_digits(size_t n)
 {
     int digits = 0;
     while(n > 0)
@@ -20,7 +20,7 @@ int count_digits(int n)
     return digits;
 }
 
-void add_command(void *args)
+static void add_command(void *args)
 {
     add_payload_t *p = args;
     if(!g_result_only)
@@ -33,7 +33,7 @@ void add_command(void *args)
     }
 }
 
-void poly_surf_command(void *args)
+static void poly_surf_command(void *args)
 {
     aparse_list list = *(aparse_list*)args;
     double *points = list.ptr;
@@ -77,7 +77,7 @@ void poly_surf_command(void *args)
             (total_area < 0 ? -total_area : total_area) / 2);
 }
 
-void poly_perm_command(void *args)
+static void poly_perm_command(void *args)
 {
     aparse_list list = *(aparse_list*)args;
     double *points = list.ptr;
@@ -114,10 +114,10 @@ void poly_perm_command(void *args)
     aparse_prog_info("total perimitter: %.6f", perm);
 }
 
-void nothing_command(void *args)
+static void nothing_command(void *args)
 {
     (void)args;
-    aparse_prog_info("this do nothing, really");
+    aparse_prog_info("this do nothing, seriously");
 }
 
 int main(int argc, char **argv)
@@ -160,7 +160,10 @@ int main(int argc, char **argv)
                 APARSE_ARG_TYPE_BOOL, "Only print the result"),
         aparse_arg_end_marker
     };
-    if(aparse_parse(argc, argv, main_args, 0, "Demonstration for subcommands") != APARSE_STATUS_OK)
+    if(aparse_parse(
+                argc, argv, 
+                main_args, NULL,
+                "Demonstration for subcommands") != APARSE_STATUS_OK)
         return 1;
     return 0;
 }

@@ -70,7 +70,8 @@ SOFTWARE.
  * @{
  */
 
-#if _MSVC_TRADITIONAL == 0 || __GNUC__ || __clang__
+#if (defined(_MSVC_TRADITIONAL) && _MSVC_TRADITIONAL == 0) \
+        || defined(__GNUC__) || defined(__clang__)
 #   define __APARSE_VA_ARGS_EXPANSION_CONFORM
 
 /** @cond HIDDEN */

@@ -601,7 +601,7 @@ static aparse_status aparse__process_parser(
         return APARSE_STATUS_OK;
     }
 
-    if(subparser->size != 0)
+    if(subparser->layout_size != 0)
     {   
         if(!aparse_verify_layout(subparser, &invalid_idx))
             aparse_raise_error(APARSE_STATUS_INVALID_LAYOUT, subparser, &invalid_idx);
@@ -836,7 +836,7 @@ static bool aparse_verify_layout(
         arg_ptr++;
     }
 
-    if (!aparse_arg_nend(arg_ptr))
+    if(aparse_arg_nend(arg_ptr))
     {
         *invalid_idx = -1;
         return false;
@@ -979,7 +979,7 @@ static void aparse_default_error_callback(
             int printed = 0;
             for (size_t i = 0; i < args->size; i++) 
             {
-                aparse_arg *item = aparse_list_get(args, i, aparse_arg*);
+                aparse_arg *item = aparse_list_get(args, aparse_arg*, i);
                 if (printed++ > 0) 
                     fprintf(stderr, ", ");
                 fprintf(stderr, "%s", item->longopt);
@@ -1295,7 +1295,7 @@ static void aparse_print_usage_before(
     aparse_print_usage_before_r(root, target, &strs);
     for (size_t i = 0; i < strs.size; i++) 
     {
-        aparse_help_before* entry = &aparse_list_get(&strs, i, aparse_help_before);
+        aparse_help_before* entry = &aparse_list_get(&strs, aparse_help_before, i);
         printf("%s ", entry->str);
         if (entry->freeable) 
             free((void*)entry->str);
@@ -1330,7 +1330,7 @@ static void aparse_print_usage_after(aparse_arg* args)
     }
     for(size_t i = 0; i < list.size; i++)
     {
-        aparse_arg* entry = aparse_list_get(&list, i, aparse_arg*);
+        aparse_arg* entry = aparse_list_get(&list, aparse_arg*, i);
         if(aparse_arg_is_argument(entry))
             printf("%s ", entry->longopt);
         else {

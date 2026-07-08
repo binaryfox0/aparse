@@ -13,27 +13,38 @@
 #else
 #endif
 
+#define error aparse_prog_error
+#define info aparse_prog_info
+
+#define ARRSZ(arr) (sizeof((arr)) / sizeof((arr)[0]))
+
+#define BUFFER_SIZE 512
+#define BUFFER_ZEROED_HASH 0x4D7705C5
+
 typedef struct test_entry {
-    char* name;
+    const char* name;
     int argc;
-    char* const * argv;
+    const char** argv;
     aparse_arg* args;
-    aparse_status expected_status;
-    uint32_t* hashs;
+    aparse_status expected;
+    uint32_t hash;
 } test_entry;
 
 
-static inline uint32_t fnv1a(const char *s)
+static inline uint32_t fnv1a(
+        const uint8_t *data,
+        const size_t size)
 {
     uint32_t h = 2166136261u;
-    for (; *s; s++) {
-        h ^= (unsigned char)*s;
+    for (size_t i = 0; i < size; i++) 
+    {
+        h ^= data[i];
         h *= 16777619u;
     }
     return h;
 }
 
-const char* status_string(const aparse_status status)
+static const char* status_string(const aparse_status status)
 {
     const char* strings[__APARSE_STATUS_ENUM_END__] = {
         [APARSE_STATUS_OK]                  = "APARSE_STATUS_OK",
@@ -62,29 +73,34 @@ static int spawn_process(
 {
 #ifndef APARSE_PLATFORM_WIN32
     char path[PATH_MAX] = {0};
-    if(readlink("/proc/self/exe", path, sizeof(path) - 1) == -1)
+    int status = 0;
+    if(readlink("/proc/self/exe", path, 
+                sizeof(path) - 1) == -1)
     {
-        aparse_prog_error("unable to get the executable path: %s", strerror(errno));
+        error("unable to get the executable path: %s", 
+                strerror(errno));
         return -1;
     }
 
-    char *argv[4] = {0};
+    const char *argv[4] = {0};
     argv[0] = path;
     argv[1] = test.name;
     argv[2] = flag_verbose ? "--verbose" : 0;
     argv[3] = 0;
 
     pid_t pid = -1;
-    if(posix_spawn(&pid, path, 0, 0, argv, 0) == -1)
+    if(posix_spawn(&pid, path, NULL, NULL, 
+                (char *const *)(uintptr_t)argv, 0) == -1)
     {
-        aparse_prog_error("unable to create the process: %s", strerror(errno));
+        error("unable to create the process: %s", 
+                strerror(errno));
         return -1;
     }
 
-    int status = 0;
     if(waitpid(pid, &status, 0) == -1)
     {
-        aparse_prog_error("unable to wait for process to complete: %s", strerror(errno));
+        error("unable to wait for process to complete: %s", 
+                strerror(errno));
         return -1;
     }
 
@@ -93,7 +109,7 @@ static int spawn_process(
 #endif
 }
 
-static aparse_status last_status = APARSE_STATUS_OK;
+static aparse_status g_last_status = APARSE_STATUS_OK;
 static void error_callback(
         const aparse_status status, 
         const void* field1, 
@@ -101,22 +117,12 @@ static void error_callback(
         void *userdata)
 {
     if(*(int*)userdata)
-        aparse_prog_error("%s: %s", __func__, aparse_error_msg(status));
-    last_status = status;
+        error("%s: %s", __func__, aparse_error_msg(status));
+    g_last_status = status;
 }
 
-typedef struct copy_data { char* src, *dest; } copy_data;
-static int subcommand_status = -1;
-static void copy_command(void* data)
-{
-    copy_data* ptr = data;
-    uint32_t src_hash = fnv1a(ptr->src);
-    uint32_t dest_hash = fnv1a(ptr->dest);
-    if(src_hash == 0xB6F3934E && dest_hash == 0xDD856CFC)
-        subcommand_status = 1;
-    else
-        subcommand_status = 0;
-}
+typedef struct copy_data { char src[32], dest[32]; } copy_data;
+static void dummy_command(void* data) { (void)data; }
 
 int main(int argc, char** argv)
 {
@@ -133,15 +139,15 @@ int main(int argc, char** argv)
     if(aparse_parse(argc, argv, main_args, 0, 0) != APARSE_STATUS_OK)
         return 1;
    
-    uint8_t storage[8][8] = {0};
+    uint8_t buffer[BUFFER_SIZE] = {0};
     aparse_arg copy_subargs[] = {
-        aparse_arg_string("file", 0, 0, "Source"),
-        aparse_arg_string("dest", 0, 0, "Destionation"),
+        aparse_arg_string("file", 0, 32, "Source"),
+        aparse_arg_string("dest", 0, 32, "Destionation"),
         aparse_arg_end_marker
     };
     aparse_arg command[] = {
-        aparse_arg_subparser("copy", copy_subargs, copy_command, 
-                0, 0, 0, copy_data, src, dest),
+        aparse_arg_subparser("copy", copy_subargs, dummy_command, 
+                buffer, sizeof(buffer), 0, copy_data, src, dest),
         aparse_arg_end_marker
     };
     aparse_arg args_1[] = {
@@ -150,68 +156,136 @@ int main(int argc, char** argv)
     };
     
     aparse_arg bignum_args[] = {
-        aparse_arg_number("bignum", storage[0], 16, APARSE_ARG_TYPE_UNSIGNED, 0),
+        aparse_arg_number("bignum", 
+                buffer, 16, 
+                APARSE_ARG_TYPE_UNSIGNED, 0),
         aparse_arg_end_marker 
     };
     aparse_arg i64_args[] = {
-        aparse_arg_number("num", storage[0], sizeof(storage[0]), APARSE_ARG_TYPE_SIGNED, 0),
+        aparse_arg_number("num", 
+                buffer, sizeof(buffer[0]), 
+                APARSE_ARG_TYPE_SIGNED, 0),
         aparse_arg_end_marker
     };
     aparse_arg u64_args[] = {
-        aparse_arg_number("num", storage[0], sizeof(storage[0]), APARSE_ARG_TYPE_UNSIGNED, 0),
+        aparse_arg_number("num", 
+                buffer, sizeof(buffer[0]), 
+                APARSE_ARG_TYPE_UNSIGNED, 0),
         aparse_arg_end_marker
     };
 
-    const test_entry tests[] = {
-        {.name="null-args", .argc=1, .argv=(char*[]){"tests"},
-            0, APARSE_STATUS_OK},
-        {"no-arg", 1, (char*[]){"tests"}, 
-            args_1, APARSE_STATUS_MISSING_POSITIONAL},
-        {"invalid-cmd", 2, (char*[]){"tests", "a"},
-            args_1, APARSE_STATUS_INVALID_SUBCOMMAND},
-        {.name="valid-cmd", .argc=4, 
-            .argv=(char*[]){"tests", "copy", "fox", "binary"},
-            args_1, APARSE_STATUS_OK},    
-        {.name="bignum", .argc=2, .argv=(char*[]){"tests", "0"},
-                bignum_args, APARSE_STATUS_UNHANDLED},
-        {"i64-uf", 2, (char*[]){"tests", "-9223372036854775809"}, 
-            i64_args, APARSE_STATUS_UNDERFLOW},
-        {"i64-of", 2, (char*[]){"tests", "9223372036854775808"}, 
-            i64_args, APARSE_STATUS_OVERFLOW},
-        {"u64-uf", 2, (char*[]){"tests", "-1"}, 
-            u64_args, APARSE_STATUS_UNDERFLOW},
-        {"u64-of", 2, (char*[]){"tests", "18446744073709551616"}, 
-            u64_args, APARSE_STATUS_OVERFLOW}
+    const test_entry tests[] = 
+    {
+        {
+            .name = "null-args", 
+            .argc = 1, 
+            .argv = (const char*[]){"tests"},
+            .args = NULL, 
+            .expected = APARSE_STATUS_OK,
+            .hash = BUFFER_ZEROED_HASH
+        },
+        {
+            .name = "no-arg", 
+            .argc = 1, 
+            .argv = (const char*[]){"tests"}, 
+            .args = args_1, 
+            .expected = APARSE_STATUS_MISSING_POSITIONAL,
+            .hash = BUFFER_ZEROED_HASH
+        },
+        {
+            .name = "invalid-cmd", 
+            .argc = 2, 
+            .argv = (const char*[]){"tests", "a"},
+            .args = args_1, 
+            .expected = APARSE_STATUS_INVALID_SUBCOMMAND,
+            .hash = BUFFER_ZEROED_HASH
+        },
+        {
+            .name = "bignum", 
+            .argc = 2, 
+            .argv = (const char*[]){"tests", "0"},
+            .args = bignum_args, 
+            .expected = APARSE_STATUS_UNHANDLED,
+            .hash = BUFFER_ZEROED_HASH
+        },
+        {
+            .name = "i64-uf", 
+            .argc = 2, 
+            .argv = (const char*[]){"tests", "-9223372036854775809"}, 
+            .args = i64_args, 
+            .expected = APARSE_STATUS_UNDERFLOW,
+            .hash = BUFFER_ZEROED_HASH
+        },
+        {
+            .name = "i64-of", 
+            .argc = 2, 
+            .argv = (const char*[]){"tests", "9223372036854775808"}, 
+            .args = i64_args, 
+            .expected = APARSE_STATUS_OVERFLOW,
+            .hash = BUFFER_ZEROED_HASH
+        },
+        {
+            .name = "u64-uf", 
+            .argc = 2, 
+            .argv = (const char*[]){"tests", "-1"}, 
+            .args = u64_args, 
+            .expected = APARSE_STATUS_UNDERFLOW,
+            .hash = BUFFER_ZEROED_HASH
+        },
+        {
+            .name = "u64-of", 
+            .argc = 2, 
+            .argv = (const char*[]){"tests", "18446744073709551616"}, 
+            .args = u64_args, 
+            .expected = APARSE_STATUS_OVERFLOW,
+            .hash = BUFFER_ZEROED_HASH
+        },
+        {
+            .name="valid-cmd", 
+            .argc=4, 
+            .argv = (const char*[]){"tests", "copy", "fox", "binary"},
+            .args = args_1, 
+            .expected = APARSE_STATUS_OK,
+            .hash = 0xA0A33A83
+        },    
     };
-    const int tests_count = sizeof(tests) / sizeof(tests[0]);
 
     if(!strcmp(test_name, "all"))
     {
         int success_count = 0, failed_count = 0;
-        for(int i = 0; i < tests_count; i++)
+        for(size_t i = 0; i < ARRSZ(tests); i++)
         {
-            int status = spawn_process(tests[i], flag_verbose);
-            int expected_status = tests[i].expected_status;
+            const test_entry *entry = &tests[i];
+            int res = 0;
+            aparse_status status = APARSE_STATUS_OK;
+
+            res = spawn_process(tests[i], flag_verbose);
+            status = (aparse_status)res;
+            aparse_status expected_status = tests[i].expected;
             int fail = status != expected_status;
     
-            aparse_prog_info("test %d (\"%s\"): %s", i + 1, 
-                    tests[i].name, fail ? "failed" : "passed");
-            if(fail) {
-                failed_count++;
-                aparse_prog_info("expected: %s, got: %s", 
+            if(fail) 
+            {
+                error("test %zu (\"%s\"): failed", i + 1, entry->name);
+                info("expected: %s, got: %s", 
                         status_string(expected_status), 
                         status_string(status));
+                failed_count++;
             } else {
+                info("test %zu (\"%s\"): passed", i + 1, entry->name);
                 success_count++;
             }
         }
 
         printf("\n");
-        aparse_prog_info("summary: %d success, %d failed", 
+        info("summary: %d success, %d failed", 
                 success_count, failed_count);
     } else {
-        int test_idx = -1;
-        for(int i = 0; i < tests_count; i++)
+        size_t test_idx = SIZE_MAX;
+        const test_entry *entry = NULL;
+        uint32_t hash = 0;
+
+        for(size_t i = 0; i < ARRSZ(tests); i++)
         {
             if(!strcmp(test_name, tests[i].name))
             {
@@ -219,20 +293,30 @@ int main(int argc, char** argv)
                 break;
             }
         }
-        if(test_idx == -1)
+        if(test_idx == SIZE_MAX)
         {
-            aparse_prog_error("unable to find the test with the following name: \"%s\"", test_name);
-            aparse_prog_info("the available tests were:");
-            for(int i = 0; i < tests_count; i++)
-                printf(" - %s\n", tests[i].name);
+            error("unknown test was specified: \"%s\"", test_name);
+            info("the available tests were:");
+            info(" - all");
+            for(size_t i = 0; i < ARRSZ(tests); i++)
+                info(" - %s", tests[i].name);
             return 1;
         }
 
-        test_entry entry = tests[test_idx];
+        entry = &tests[test_idx];
         aparse_set_error_callback(error_callback, &flag_verbose);
-        aparse_parse(entry.argc, entry.argv, 
-                entry.args, 0, 0);
-        return subcommand_status == 0 && subcommand_status != -1 ? 255 : last_status;
+        aparse_parse(
+                entry->argc, (char *const *)(uintptr_t)entry->argv, 
+                entry->args, NULL, NULL);
+        hash = fnv1a(buffer, sizeof(buffer));
+        if(entry->hash != hash)
+        {
+            error("hash mismatched, expected: 0x%08X, got: 0x%08X",
+                    entry->hash, hash);
+            return (int)APARSE_STATUS_FAILURE;
+        }
+
+        return (int)g_last_status;
     }
     
     return 0;
