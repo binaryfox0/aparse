@@ -253,7 +253,6 @@ enum aparse_arg_types_e
 {
     /**
      * @brief Sign flag mask for signed argument types.
-     *
      * Used internally to mark that an argument type is signed.
      */
     APARSE_ARG_TYPE_SIGNED_FLAGS = (1 << 7),
@@ -265,14 +264,12 @@ enum aparse_arg_types_e
 
     /**
      * @brief String argument type.
-     *
      * Stores a pointer to a null-terminated string.
      */
     APARSE_ARG_TYPE_STRING,
 
     /**
      * @brief Boolean argument type.
-     *
      * Typically represents flags like `--verbose` or `--quiet`.
      */
     APARSE_ARG_TYPE_BOOL,
@@ -289,42 +286,39 @@ enum aparse_arg_types_e
 
     /**
      * @brief Array argument type.
-     *
-     * Indicates that the argument points to a list of values rather than a single one.
+     * Indicates that the argument points to a list of values 
+     * rather than a single one.
      */
     APARSE_ARG_TYPE_ARRAY = (1 << 3),
 
     /**
      * @brief Positional argument type.
-     *
-     * Used for arguments that are identified by their position, not by an option name.
+     * Used for arguments that are identified by their position, 
+     * not by an option name.
      */
     APARSE_ARG_TYPE_POSITIONAL = (1 << 4),
 
     /**
      * @brief Normal argument type.
-     *
      * Used for standard named options like `--file` or `-f`.
      */
     APARSE_ARG_TYPE_ARGUMENT   = (1 << 5),
 
     /**
      * @brief Subparser or subcommand argument type.
-     *
-     * Equivalent to @ref APARSE_ARG_TYPE_POSITIONAL, but used for defining subcommands.
+     * Equivalent to @ref APARSE_ARG_TYPE_POSITIONAL, 
+     * but used for defining subcommands.
      */
     APARSE_ARG_TYPE_SUBPARSER  = APARSE_ARG_TYPE_POSITIONAL,
 
     /**
      * @brief Signed integer argument type.
-     *
      * Combines @ref APARSE_ARG_TYPE_UNSIGNED with @ref APARSE_ARG_TYPE_SIGNED_FLAGS.
      */
     APARSE_ARG_TYPE_SIGNED = APARSE_ARG_TYPE_UNSIGNED | APARSE_ARG_TYPE_SIGNED_FLAGS,
 
     /**
      * @brief Bitmask used to extract base argument type.
-     *
      * Can be applied to a type value to ignore modifier flags.
      */
     APARSE_ARG_TYPE_BITMASK = 0x7
@@ -933,7 +927,6 @@ void aparse_set_error_callback(
  *
  * @warning The returned pointer must not be modified or freed.
  */
-const char* aparse_error_msg(const aparse_status status);
 const char* aparse_error_msg(const aparse_status status);
 
 #ifdef __cplusplus 

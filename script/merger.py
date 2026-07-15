@@ -1,8 +1,41 @@
 from pathlib import Path
+from typing import TextIO
+from datetime import UTC, datetime
 
 BANNER_WIDTH = 75
-MAX_INT = 2_147_483_647
 
+MIT_LICENSE = f"""MIT License
+
+Copyright (c) {datetime.now(UTC).year} binaryfox0
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+"""
+
+OUTPUT_FILE = "aparse.h"
+HEADER_GUARD = "APARSE_H"
+HEADER_IMPLEMENTATION = "APARSE_IMPLEMENTATION"
+
+REPO_DIR = (Path(__file__).resolve().parent / "..").resolve()
+HEADER_DIR = REPO_DIR / "include"
+HEADER_ENTRY = "aparse.h"
+SOURCE_DIR = REPO_DIR / "src"
+SOURCES = [ "aparse_list.c", "aparse.c" ]
 
 def append_banner(dest, content):
     content_len = len(content)
@@ -11,139 +44,140 @@ def append_banner(dest, content):
     right = max(pad_total - left, 0)
     dest.write(f"/* {'-' * left}{content}{'-' * right} */\n\n")
 
-
-def construct_file_queue(src_dir: Path):
-    entries = []
-
-    for file in sorted(src_dir.iterdir()):
-        if not file.is_file():
-            continue
-
-        with file.open("r", encoding="utf-8") as f:
-            first_line = f.readline().strip()
-
-        if not (first_line.startswith("/*") and "," in first_line):
-            continue
-
-        clean = first_line.removeprefix("/*").removesuffix("*/").strip()
-        parts = [p.strip() for p in clean.split(",")]
-
-        values = {}
-        for part in parts:
-            if "=" not in part:
-                continue
-            key, val = part.split("=", 1)
-            values[key.strip()] = int(val.strip())
-
-        if "Priority" not in values or "FileContentStart" not in values:
-            continue
-
-        priority = values.pop("Priority")
-        entries.append((priority, file, values))
-
-    entries.sort(key=lambda x: x[0], reverse=True)
-    return entries
-
-
-def collect_system_headers(file_queue):
+def collect_headers(include_dir: Path, entry):
+    header_queue = [include_dir / entry]
+    visited = set()
     system_headers = set()
 
-    for _, file, attrib in file_queue:
-        with file.open("r", encoding="utf-8") as f:
-            for _ in range(attrib["FileContentStart"] - 1):
-                f.readline()
+    while header_queue:
+        path = header_queue.pop()
+        if path in visited:
+            continue
+        visited.add(path)
 
-            while True:
-                pos = f.tell()
-                line = f.readline()
+        in_comment = False
+        with path.open("r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if in_comment:
+                    if "*/" in line:
+                        in_comment = False
+                    continue
+
+                if line.startswith("/*"):
+                    if "*/" not in line:
+                        in_comment = True
+                    continue
+
                 if not line:
+                    continue
+                
+                if line.startswith("#include"):
+                    include_part = line.removeprefix("#include").strip()
+                    if include_part.startswith('<') and include_part.endswith('>'):
+                        path2 = include_dir / include_part[1:-1]
+                        if path2.exists():
+                            header_queue.append(path2)
+                        else:
+                            system_headers.add(include_part[1:-1])
+                elif not line.startswith("#"):
                     break
 
-                stripped = line.strip()
+    return sorted(visited, reverse=True), system_headers
+
+def emit_implementation(dest: TextIO, path: Path):
+    in_comment = False
+    comment_count = 0
+    found_include = False
+    after_includes = False
+    skipped_guard = False
+    pending_ifndef = False
+
+    prev_line: str | None = None
+
+    with path.open("r", encoding="utf-8") as f:
+        for line in f:
+            stripped = line.strip()
+            if comment_count == 1 and in_comment:
+                if "*/" in stripped:
+                    in_comment = False
+                continue
+
+            if comment_count < 1 and stripped.startswith("/*"):
+                comment_count += 1
+                if "*/" not in stripped:
+                    in_comment = True
+                continue
+
+            if not skipped_guard:
+                if pending_ifndef and stripped.startswith("#define"):
+                    skipped_guard = True
+                    continue
+                if stripped.startswith("#ifndef"):
+                    pending_ifndef = True
+                    continue
+
+            if not after_includes:
                 if not stripped:
                     continue
-
-                if not stripped.startswith("#include"):
-                    f.seek(pos)
-                    break
-
-                include_part = stripped.removeprefix("#include").strip()
-
-                if include_part.startswith("<") and include_part.endswith(">"):
-                    system_headers.add(include_part)
-
-    return sorted(system_headers)
-
-
-def write_implementation(dest, file_queue):
-    for _, file, attrib in file_queue:
-        macros = set()
-
-        content_start = attrib["FileContentStart"]
-        content_end = attrib.get("FileContentEnd", MAX_INT)
-
-        append_banner(dest, f"{file.name} BEGIN")
-
-        with file.open("r", encoding="utf-8") as f:
-            for line_i, line in enumerate(f, start=1):
-
-                if line_i < content_start:
+                if stripped.startswith("#include"):
+                    found_include = True
                     continue
-                if line_i > content_end:
-                    break
+                elif found_include:
+                    after_includes = True
 
-                if line.startswith("#define "):
-                    macro = line.split(maxsplit=2)[1].split("(")[0]
-                    macros.add(macro)
+            if prev_line is not None:
+                dest.write(prev_line)
+            prev_line = line
 
-                if line.startswith('#include "'):
-                    continue
-
-                dest.write(line)
-
-        dest.write("\n")
-
-        for m in sorted(macros):
-            dest.write(f"#undef {m}\n")
-
-        append_banner(dest, f"{file.name} END")
-
+    if prev_line is not None and \
+            not (skipped_guard and prev_line.strip().startswith("#endif")):
+        dest.write(prev_line)
 
 if __name__ == "__main__":
     repo_path = (Path(__file__).resolve().parent / "..").resolve()
+    include_dir = repo_path / "include"
     src_dir = repo_path / "src"
 
-    output_path = Path("aparse.h")
+    output_path = Path(OUTPUT_FILE)
 
-    public_headers = [
-        repo_path / "include/aparse_list.h",
-        repo_path / "include/aparse.h",
-    ]
-
-    file_queue = construct_file_queue(src_dir)
-    system_headers = collect_system_headers(file_queue)
+    header_queue, include_sysheaders = \
+            collect_headers(include_dir, "aparse.h")
+    
+    source_queue, src_sysheaders = set(), set()
+    for fname in SOURCES:
+        queue, sysheaders = \
+                collect_headers(SOURCE_DIR, fname)
+        source_queue.update(queue)
+        src_sysheaders.update(sysheaders)
+        
 
     with output_path.open("w", encoding="utf-8") as dest:
-        for header in public_headers:
-            with header.open("r", encoding="utf-8") as f:
-                for line in f:
-                    stripped = line.strip()
-                    if stripped.startswith('#include "'):
-                        continue
-                    if stripped == "#pragma once":
-                        continue
-                    dest.write(line)
+        dest.write("/*\n")
+        dest.write(MIT_LICENSE)
+        dest.write("*/\n\n")
+
+        dest.write(f"#ifndef {HEADER_GUARD}\n")
+        dest.write(f"#define {HEADER_GUARD}\n\n")
+
+        for header in include_sysheaders:
+            dest.write(f"#include <{header}>\n")
+        dest.write("\n")
+
+        for path in header_queue:
+            emit_implementation(dest, path)
 
         dest.write("\n\n")       
-        dest.write("#ifdef APARSE_IMPLEMENTATION\n\n")
-
-        append_banner(dest, "System Headers BEGIN")
-
-        for header in system_headers:
-            dest.write(f"#include {header}\n")
+        dest.write(f"#ifdef {HEADER_IMPLEMENTATION}\n\n")
+        
+        for header in src_sysheaders:
+            dest.write(f"#include <{header}>\n")
         dest.write("\n")
-        append_banner(dest, "System Headers END")
 
-        write_implementation(dest, file_queue)
+        for path in source_queue:
+            append_banner(dest, f"{path} BEGIN")
+            emit_implementation(dest, path)
+            append_banner(dest, f"{path} END")
 
-        dest.write("\n#endif /* APARSE_IMPLEMENTATION */\n")
+        dest.write(f"\n#endif /* {HEADER_IMPLEMENTATION} */\n")
+        dest.write(f"#endif /* {HEADER_GUARD} */\n")
