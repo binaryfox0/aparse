@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+
+import argparse
 from pathlib import Path
 from typing import TextIO
 from datetime import UTC, datetime
@@ -27,7 +30,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-OUTPUT_FILE = "aparse.h"
 HEADER_GUARD = "APARSE_H"
 HEADER_IMPLEMENTATION = "APARSE_IMPLEMENTATION"
 
@@ -135,14 +137,15 @@ def emit_implementation(dest: TextIO, path: Path):
         dest.write(prev_line)
 
 if __name__ == "__main__":
-    repo_path = (Path(__file__).resolve().parent / "..").resolve()
-    include_dir = repo_path / "include"
-    src_dir = repo_path / "src"
-
-    output_path = Path(OUTPUT_FILE)
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+            "-o", "--output", 
+            type=str, default="aparse.h", 
+            help="Path to amalgamation header")
+    args = parser.parse_args()
 
     header_queue, include_sysheaders = \
-            collect_headers(include_dir, "aparse.h")
+            collect_headers(HEADER_DIR, "aparse.h")
     
     source_queue, src_sysheaders = set(), set()
     for fname in SOURCES:
@@ -152,7 +155,7 @@ if __name__ == "__main__":
         src_sysheaders.update(sysheaders)
         
 
-    with output_path.open("w", encoding="utf-8") as dest:
+    with Path(args.output).open("w", encoding="utf-8") as dest:
         dest.write("/*\n")
         dest.write(MIT_LICENSE)
         dest.write("*/\n\n")
