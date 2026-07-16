@@ -100,16 +100,18 @@ def emit_implementation(dest: TextIO, path: Path):
     with path.open("r", encoding="utf-8") as f:
         for line in f:
             stripped = line.strip()
-            if comment_count == 1 and in_comment:
-                if "*/" in stripped:
-                    in_comment = False
-                continue
 
-            if comment_count < 1 and stripped.startswith("/*"):
-                comment_count += 1
-                if "*/" not in stripped:
-                    in_comment = True
-                continue
+            if not after_includes:
+                if comment_count == 1 and in_comment:
+                    if "*/" in stripped:
+                        in_comment = False
+                    continue
+
+                if comment_count < 1 and stripped.startswith("/*"):
+                    comment_count += 1
+                    if "*/" not in stripped:
+                        in_comment = True
+                    continue
 
             if not skipped_guard:
                 if pending_ifndef and stripped.startswith("#define"):
