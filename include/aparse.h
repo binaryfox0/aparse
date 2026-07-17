@@ -241,7 +241,7 @@ extern "C" {
 #endif
 
 /**
- * @enum aparse_arg_types_e
+ * @enum aparse_arg_types
  * @brief Enumerates all possible argument types recognized by the parser.
  *
  * These values define how each @ref aparse_arg_s entry should be interpreted.
@@ -249,7 +249,7 @@ extern "C" {
  *
  * @see aparse_arg_s
  */
-enum aparse_arg_types_e
+typedef enum aparse_arg_types
 {
     /**
      * @brief Sign flag mask for signed argument types.
@@ -322,12 +322,20 @@ enum aparse_arg_types_e
      * Can be applied to a type value to ignore modifier flags.
      */
     APARSE_ARG_TYPE_BITMASK = 0x7
-};
+} aparse_arg_types;
 
-/** @typedef aparse_arg_types
- * @brief Type alias for @ref aparse_arg_types_e.
+/**
+ * @brief Describes a single argument, option, or subparser definition.
  */
-typedef enum aparse_arg_types_e aparse_arg_types;
+typedef struct aparse_arg aparse_arg;
+
+/**
+ * @brief Handler function called after successful subparser parsing.
+ * 
+ * @param arg  Pointer to `aparse_arg` contain information about the caller
+ * @param data Pointer to the data structure described by @ref data_layout.
+ */
+typedef void (*aparse_handler_t)(const aparse_arg *arg, void *data);
 
 /**
  * @struct aparse_arg
@@ -436,10 +444,8 @@ typedef struct aparse_arg
 
             /**
              * @brief Handler function called after successful subparser parsing.
-             *
-             * @param data Pointer to the data structure described by @ref data_layout.
              */
-            void (*handler)(void* data);
+            aparse_handler_t handler;
 
             /**
              * @brief Array describing the data layout passed to the handler.
@@ -737,7 +743,7 @@ APARSE_INLINE aparse_arg aparse_arg_string(
 APARSE_INLINE aparse_arg aparse_arg_subparser_impl(
         const char* name,
         aparse_arg* subargs, 
-        void (*handle)(void*),
+        const aparse_handler_t handler,
         void *buffer, 
         const size_t size,
         const char* help, 
@@ -747,13 +753,13 @@ APARSE_INLINE aparse_arg aparse_arg_subparser_impl(
     return (aparse_arg) {
         .longopt = name, 
         .subargs = subargs, 
-        .handler = handle,
+        .handler = handler,
         .data_layout = data_layout, 
         .layout_size = layout_size,
         .ptr = buffer, 
         .size = size,
         .help = help,
-        .type = APARSE_ARG_TYPE_POSITIONAL // parser doesn't care 'bout this, but help constructor DOES care
+        .type = APARSE_ARG_TYPE_SUBPARSER 
     };
 }
 

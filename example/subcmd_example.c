@@ -20,9 +20,11 @@ static int count_digits(size_t n)
     return digits;
 }
 
-static void add_command(void *args)
+static void add_command(const aparse_arg *arg, void *data)
 {
-    add_payload_t *p = args;
+    add_payload_t *p = data;
+    (void)arg;
+
     if(!g_result_only)
     {
         aparse_prog_info("result: %d + %d = %d", 
@@ -33,9 +35,9 @@ static void add_command(void *args)
     }
 }
 
-static void poly_surf_command(void *args)
+static void poly_surf_command(const aparse_arg *arg, void *data)
 {
-    aparse_list list = *(aparse_list*)args;
+    aparse_list list = *(aparse_list*)data;
     double *points = list.ptr;
     size_t point_count = list.size / 2;
     int dig_count = count_digits(point_count);
@@ -77,13 +79,16 @@ static void poly_surf_command(void *args)
             (total_area < 0 ? -total_area : total_area) / 2);
 }
 
-static void poly_perm_command(void *args)
+static void poly_perm_command(const aparse_arg *arg, void *data)
 {
-    aparse_list list = *(aparse_list*)args;
+    aparse_list list = *(aparse_list*)data;
     double *points = list.ptr;
     size_t point_count = list.size / 2;
     int dig_count = count_digits(point_count);
     double perm = 0;
+    
+    (void)arg;
+
     if(list.size % 2 != 0)
     {
         aparse_prog_error("missing y component from the final point");
@@ -114,9 +119,10 @@ static void poly_perm_command(void *args)
     aparse_prog_info("total perimitter: %.6f", perm);
 }
 
-static void nothing_command(void *args)
+static void nothing_command(const aparse_arg *arg, void *data)
 {
-    (void)args;
+    (void)arg;
+    (void)data;
     aparse_prog_info("this do nothing, seriously");
 }
 

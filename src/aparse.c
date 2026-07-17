@@ -302,11 +302,14 @@ void aparse_dispatch_all(
         return;
     if(dispatch_list->itemsz != sizeof(aparse__dispatch_t))
         return;
-    aparse__dispatch_t* list = dispatch_list->ptr;
+
     for(size_t i = 0; i < dispatch_list->size; i++)
     {
-        list[i].args->handler(list[i].payload);
-        aparse__destroy_payload(list[i].args, list[i].payload);
+        aparse__dispatch_t *entry = 
+            &aparse_list_get(dispatch_list, aparse__dispatch_t, i);
+
+        entry->args->handler(entry->args, entry->payload);
+        aparse__destroy_payload(entry->args, entry->payload);
     }
     aparse_list_free(dispatch_list);
 }
@@ -633,7 +636,7 @@ static aparse_status aparse__process_parser(
     if(!subparser->subargs)
     {
         aparse_list_add(ctx->dispatch, 
-                (aparse__dispatch_t[1]){{subparser, 0}});
+                (aparse__dispatch_t[1]){{subparser, NULL}});
         return APARSE_STATUS_OK;
     }
 

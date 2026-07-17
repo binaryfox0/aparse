@@ -127,7 +127,11 @@ static void error_callback(
 }
 
 typedef struct copy_data { char src[32], dest[32]; } copy_data;
-static void dummy_command(void* data) { (void)data; }
+static void dummy_command(const aparse_arg *arg, void* data) 
+{ 
+    (void)arg;
+    (void)data; 
+}
 
 int main(int argc, char** argv)
 {
