@@ -4,6 +4,7 @@ import argparse
 from pathlib import Path
 from typing import TextIO
 from datetime import UTC, datetime
+import subprocess
 
 BANNER_WIDTH = 75
 
@@ -38,6 +39,19 @@ HEADER_DIR = REPO_DIR / "include"
 HEADER_ENTRY = "aparse.h"
 SOURCE_DIR = REPO_DIR / "src"
 SOURCES = [ "aparse_list.c", "aparse.c" ]
+
+def get_git_commit():
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            check=True,
+        )
+        return result.stdout.strip()
+    except subprocess.CalledProcessError:
+        return "unknown"
 
 def append_banner(dest, content):
     content_len = len(content)
@@ -161,6 +175,8 @@ if __name__ == "__main__":
         dest.write("/*\n")
         dest.write(MIT_LICENSE)
         dest.write("*/\n\n")
+
+        dest.write(f"/* Source commit: {get_git_commit()} */\n\n")
 
         dest.write(f"#ifndef {HEADER_GUARD}\n")
         dest.write(f"#define {HEADER_GUARD}\n\n")
