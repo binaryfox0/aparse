@@ -60,26 +60,26 @@ SOFTWARE.
 
 #define APARSE__MIN(a, b) ((a < b) ? (a) : (b))
 
-#define aparse_library_debug(fmt, ...) \
+#define aparse__lib__debug(fmt, ...) \
     __aparse_fprintf(stderr, "aparse: " \
             __aparse_debug_label ": " fmt "\n", ##__VA_ARGS__)
-#define aparse_library_info(fmt, ...) \
+#define aparse__lib__info(fmt, ...) \
     __aparse_fprintf(stderr, "aparse: " \
             __aparse_info_label  ": " fmt "\n", ##__VA_ARGS__)
-#define aparse_library_warn(fmt, ...) \
+#define aparse__lib__warn(fmt, ...) \
     __aparse_fprintf(stderr, "aparse: " \
             __aparse_warn_label  ": " fmt "\n", ##__VA_ARGS__)
-#define aparse_library_error(fmt, ...) \
+#define aparse__lib__error(fmt, ...) \
     __aparse_fprintf(stderr, "aparse: " \
             __aparse_error_label ": "fmt "\n", ##__VA_ARGS__)
-#define aparse__raise_fatal(type, field1, field2) \
+#define aparse__raise_fatal(ctx, type, field1, field2) \
     { \
-        aparse__err_callback((type), (field1), (field2), aparse__err_userdata); \
+        aparse__err_callback((ctx), (type), (field1), (field2), aparse__err_userdata); \
         return APARSE_STATUS_FAILURE; \
     }
 
-#define aparse__raise_nonfatal(type, field1, field2) \
-        aparse__err_callback((type), (field1), (field2), aparse__err_userdata);
+#define aparse__raise_nonfatal(ctx, type, field1, field2) \
+        aparse__err_callback((ctx), (type), (field1), (field2), aparse__err_userdata);
 
 #define aparse__foreach(child, parent) \
     for(aparse_arg *child = parent->subargs; aparse_arg_nend(child); child++)
@@ -124,7 +124,6 @@ static inline bool aparse__type_cmp(
     return (arg->type & APARSE_ARG_TYPE_BITMASK) == type;
 }
 
-static aparse_arg* root_args = 0, *current_args = 0;
 const char* __aparse_progname = 0;
 static const char *aparse__desc = 0;
 
@@ -194,9 +193,11 @@ static void aparse__destroy_payload(
         uint8_t *payload);
 // Failure handling
 static aparse_status aparse__check_missing(
+        aparse_context* ctx,
         aparse_arg* args);
 
 static void aparse__default_errcb(
+        const aparse_context* ctx,
         const aparse_status status, 
         const void* field1, 
         const void* field2, 
@@ -223,7 +224,8 @@ static void aparse__print_pos_help(
 static void aparse__print_subcmds(
         const aparse_arg* args);
 
-static void aparse__print_usage(void);
+static void aparse__print_usage(
+        const aparse_context *ctx);
 
 /* Miscellaneous functions */
 static void aparse__reset_state(
@@ -255,7 +257,6 @@ aparse_status aparse_parse(
         return APARSE_STATUS_FAILURE;
     __aparse_progname = aparse__get_exename(argv[0]);
     aparse__desc = program_desc;
-    root_args = args;
 
     if(!args)
         return APARSE_STATUS_OK;
@@ -273,11 +274,11 @@ aparse_status aparse_parse(
     aparse__reset_state(args);
     ret = aparse__parse_impl(argc, argv, args, &ctx);
     if(ret == APARSE_STATUS_OK)
-        ret = aparse__check_missing(args);
+        ret = aparse__check_missing(&ctx, args);
     
     if(ret == APARSE_STATUS_OK && unknown_list.size > 0)
     {
-        aparse__raise_nonfatal(APARSE_STATUS_UNKNOWN_ARGUMENT, \
+        aparse__raise_nonfatal(&ctx, APARSE_STATUS_UNKNOWN_ARGUMENT, \
                 &unknown_list, NULL);
         ret = APARSE_STATUS_FAILURE;
     }
@@ -392,8 +393,9 @@ static aparse_status aparse__parse_impl(
     if(!args)
         return APARSE_STATUS_OK;
 
+    if(ctx->stack_top >= APARSE__MAX_DEPTH)
+        return APARSE_STATUS_TOO_DEEP;
     
-    current_args = args;
     ctx->stack[ctx->stack_top++] = args;
     while (*idx < argc) {
         const char* cargv = argv[*idx];
@@ -427,7 +429,7 @@ static aparse_status aparse__parse_impl(
                     if(aparse__process_parser(argc, cargv, argv, ptr, 
                                 ctx) != APARSE_STATUS_OK)
                         return APARSE_STATUS_FAILURE;
-                    current_args = args; // reset it
+                    ctx->stack_top--;
                 }
             } else {
                 if(ptr->shortopt != aparse__help_arg.shortopt) {
@@ -451,13 +453,12 @@ static aparse_status aparse__parse_impl(
 
             if (!aparse_list_add(ctx->unknown, &cargv)) 
             {
-                aparse__raise_fatal(APARSE_STATUS_ALLOC_FAILURE, 
+                aparse__raise_fatal(ctx, APARSE_STATUS_ALLOC_FAILURE, 
                         NULL, NULL);
             }
         }
     }
 
-    ctx->stack_top--;
     return APARSE_STATUS_OK;
 }
 
@@ -468,11 +469,11 @@ static aparse_status aparse__process_argument(
 {
     if (!arg->ptr)
     {
-        aparse__raise_nonfatal(APARSE_STATUS_NULL_POINTER, arg, NULL);
+        aparse__raise_nonfatal(ctx, APARSE_STATUS_NULL_POINTER, arg, NULL);
         return APARSE_STATUS_OK; // continue
     }
     if (arg->size <= 0 && !(arg->type & APARSE_ARG_TYPE_STRING))
-        aparse__raise_fatal(APARSE_STATUS_INVALID_SIZE, arg, &arg->size);
+        aparse__raise_fatal(ctx, APARSE_STATUS_INVALID_SIZE, arg, &arg->size);
 
     switch(arg->type & APARSE_ARG_TYPE_BITMASK)
     {
@@ -495,7 +496,7 @@ static aparse_status aparse__process_argument(
         {
             bool have_sign = arg->type & APARSE_ARG_TYPE_SIGNED_FLAGS;
             if(arg->size > sizeof(uint64_t))
-                aparse__raise_fatal(APARSE_STATUS_UNHANDLED, arg, 0);
+                aparse__raise_fatal(ctx, APARSE_STATUS_UNHANDLED, arg, 0);
 
             // Determine base
             int base = 10;
@@ -507,7 +508,7 @@ static aparse_status aparse__process_argument(
                 p++;
             }
             if(is_negative && !have_sign)
-                aparse__raise_fatal(APARSE_STATUS_UNDERFLOW, arg, 0);
+                aparse__raise_fatal(ctx, APARSE_STATUS_UNDERFLOW, arg, 0);
 
             if (p[0] == '0') {
                 switch(tolower(p[1]))
@@ -524,15 +525,15 @@ static aparse_status aparse__process_argument(
             uint64_t num = strtoull(p, &endptr, base);
             
             if(*endptr)
-                aparse__raise_fatal(APARSE_STATUS_INVALID_VALUE, arg, argv);
+                aparse__raise_fatal(ctx, APARSE_STATUS_INVALID_VALUE, arg, argv);
      
             // Overflow/Underflow check No.1 (for 8 bytes)
             if(errno == ERANGE)
             {
                 if(num == ULLONG_MAX || (int64_t)num == LLONG_MAX)
-                    aparse__raise_fatal(APARSE_STATUS_OVERFLOW, arg, argv);
+                    aparse__raise_fatal(ctx, APARSE_STATUS_OVERFLOW, arg, argv);
                 if((int64_t)num == LLONG_MIN)
-                    aparse__raise_fatal(APARSE_STATUS_UNDERFLOW, arg, argv);
+                    aparse__raise_fatal(ctx, APARSE_STATUS_UNDERFLOW, arg, argv);
             } else {
                 // Overflow/Underflow check No.2
                 size_t bits = arg->size * 8;
@@ -540,7 +541,7 @@ static aparse_status aparse__process_argument(
                     if(is_negative)
                     {
                         if(num > (uint64_t)INT64_MAX + 1ULL)
-                            aparse__raise_fatal(APARSE_STATUS_UNDERFLOW, arg, argv);
+                            aparse__raise_fatal(ctx, APARSE_STATUS_UNDERFLOW, arg, argv);
                         if(num == (uint64_t)INT64_MAX + 1ULL)
                             num = (uint64_t)INT64_MIN;
                         else
@@ -550,16 +551,16 @@ static aparse_status aparse__process_argument(
                         int64_t max_val = 0;
 
                         if(num > (uint64_t)INT64_MAX)
-                            aparse__raise_fatal(APARSE_STATUS_OVERFLOW, arg, argv);
+                            aparse__raise_fatal(ctx, APARSE_STATUS_OVERFLOW, arg, argv);
                         min_val = bits == 64 ? INT64_MIN : -(1LL << (bits - 1));
                         max_val = bits == 64 ? INT64_MAX :  (1LL << (bits - 1)) - 1;
                         if ((int64_t)num < min_val || (int64_t)num > max_val)
-                            aparse__raise_fatal(APARSE_STATUS_OVERFLOW, arg, argv);
+                            aparse__raise_fatal(ctx, APARSE_STATUS_OVERFLOW, arg, argv);
                     }
                 } else {
                     uint64_t max_val = bits == 64 ? UINT_MAX : ((1ULL << bits) - 1);
                     if (num > max_val)
-                        aparse__raise_fatal(APARSE_STATUS_OVERFLOW, arg, argv);
+                        aparse__raise_fatal(ctx, APARSE_STATUS_OVERFLOW, arg, argv);
                 }
             }
 
@@ -576,14 +577,17 @@ static aparse_status aparse__process_argument(
         case APARSE_ARG_TYPE_FLOAT:
         {
             aparse_status status = aparse__process_float(argv, arg);
-            if(status != APARSE_STATUS_UNDERFLOW)
-                aparse__raise_fatal(status, arg, argv)
-            else
-                aparse__raise_nonfatal(status, arg, argv);
+            if(status != APARSE_STATUS_OK)
+            {
+                if(status != APARSE_STATUS_UNDERFLOW)
+                    aparse__raise_fatal(ctx, status, arg, argv)
+                else
+                    aparse__raise_nonfatal(ctx, status, arg, argv);
+            }
             break;
         }
         default:
-            aparse__raise_fatal(APARSE_STATUS_INVALID_TYPE, arg, 0);
+            aparse__raise_fatal(ctx, APARSE_STATUS_INVALID_TYPE, arg, 0);
     }
     return APARSE_STATUS_OK;
 }
@@ -604,7 +608,7 @@ static aparse_status aparse__process_parser(
 
     if(!arg->subargs)
     {
-        aparse__raise_nonfatal(APARSE_STATUS_NULL_POINTER, 
+        aparse__raise_nonfatal(ctx, APARSE_STATUS_NULL_POINTER, 
                 arg, NULL);
         return APARSE_STATUS_OK;
     }
@@ -622,7 +626,7 @@ static aparse_status aparse__process_parser(
         aparse_list arg_list = { .ptr = (void*)arg->subargs };
         for(aparse_arg* copy = arg_list.ptr; aparse_arg_nend(copy); copy++)
             arg_list.size++;
-        aparse__raise_fatal(APARSE_STATUS_INVALID_SUBCOMMAND, 
+        aparse__raise_fatal(ctx, APARSE_STATUS_INVALID_SUBCOMMAND, 
                 &arg_list, cargv);
     }
 
@@ -637,7 +641,7 @@ static aparse_status aparse__process_parser(
     {   
         size_t last_idx = subparser->layout_size - 1;
         if(!aparse__verify_layout(subparser, &invalid_idx))
-            aparse__raise_fatal(APARSE_STATUS_INVALID_LAYOUT, subparser, &invalid_idx);
+            aparse__raise_fatal(ctx, APARSE_STATUS_INVALID_LAYOUT, subparser, &invalid_idx);
         min_size =
                 subparser->data_layout[last_idx * 2] + 
                 subparser->data_layout[last_idx * 2 + 1];
@@ -645,10 +649,10 @@ static aparse_status aparse__process_parser(
         {
             buffer = calloc(min_size, sizeof(*buffer));
             if(!buffer)
-                aparse__raise_fatal(APARSE_STATUS_ALLOC_FAILURE, 0, 0);
+                aparse__raise_fatal(ctx, APARSE_STATUS_ALLOC_FAILURE, 0, 0);
         } else {
             if(subparser->size < min_size)
-                aparse__raise_fatal(APARSE_STATUS_INVALID_SIZE,
+                aparse__raise_fatal(ctx, APARSE_STATUS_INVALID_SIZE,
                         subparser, &subparser->size);
             buffer = subparser->ptr;
         }
@@ -658,7 +662,7 @@ static aparse_status aparse__process_parser(
 
     ret = aparse__parse_impl(argc, argv, subparser->subargs, ctx);
     if(ret == APARSE_STATUS_OK)
-        ret = aparse__check_missing(subparser->subargs);
+        ret = aparse__check_missing(ctx, subparser->subargs);
 
     if(!subparser->handler || ret != APARSE_STATUS_OK)
         free(buffer);
@@ -714,7 +718,7 @@ static aparse_status aparse_process_optional(
     else {
         if(*idx >= argc) {
             int expected_count = 1;
-            aparse__raise_fatal(APARSE_STATUS_MISSING_VALUE, arg, &expected_count);
+            aparse__raise_fatal(ctx, APARSE_STATUS_MISSING_VALUE, arg, &expected_count);
         }
         (*idx)++;
         return aparse__process_argument(
@@ -784,11 +788,11 @@ static aparse_status aparse__process_array(
     void *ptr = 0;
 
     if(!dest)
-        aparse__raise_fatal(APARSE_STATUS_NULL_POINTER, arg, 0);
+        aparse__raise_fatal(ctx, APARSE_STATUS_NULL_POINTER, arg, 0);
     if(arg->size < sizeof(aparse_list))
-        aparse__raise_fatal(APARSE_STATUS_INVALID_SIZE, arg, &arg->size);
+        aparse__raise_fatal(ctx, APARSE_STATUS_INVALID_SIZE, arg, &arg->size);
     if((arg->type & APARSE_ARG_TYPE_BITMASK) == APARSE_ARG_TYPE_UNKNOWN)
-        aparse__raise_fatal(APARSE_STATUS_INVALID_TYPE, arg, 0);
+        aparse__raise_fatal(ctx, APARSE_STATUS_INVALID_TYPE, arg, 0);
 
     (*idx)--;
     arrsz = (size_t)(argc - *idx);
@@ -796,14 +800,14 @@ static aparse_status aparse__process_array(
         sizeof(char*) : 
         arg->element_size;
     if(increment <= 0)
-        aparse__raise_fatal(APARSE_STATUS_INVALID_SIZE, arg, &arg->element_size);
+        aparse__raise_fatal(ctx, APARSE_STATUS_INVALID_SIZE, arg, &arg->element_size);
 
     if(arrsz < arg->array_size)
-        aparse__raise_fatal(APARSE_STATUS_MISSING_VALUE, arg, &arrsz);
+        aparse__raise_fatal(ctx, APARSE_STATUS_MISSING_VALUE, arg, &arrsz);
     
     ptr = malloc(increment * arrsz);
     if(!ptr)
-        aparse__raise_fatal(APARSE_STATUS_ALLOC_FAILURE, 0, 0);
+        aparse__raise_fatal(ctx, APARSE_STATUS_ALLOC_FAILURE, 0, 0);
     dest->capacity = arrsz;
     dest->ptr = ptr;
     dest->itemsz = increment;
@@ -943,6 +947,7 @@ static void aparse__destroy_payload(
 
 // 0 no error, 1 error (just for cleaning up)
 static aparse_status aparse__check_missing(
+        aparse_context* ctx,
         aparse_arg* args) 
 {
     aparse_list missing_args = {.itemsz = sizeof(aparse_arg*)};
@@ -954,8 +959,8 @@ static aparse_status aparse__check_missing(
     }
     if(missing_args.size > 0)
     {
-        aparse__raise_fatal(APARSE_STATUS_MISSING_POSITIONAL, 
-                current_args, &missing_args);
+        aparse__raise_fatal(ctx, APARSE_STATUS_MISSING_POSITIONAL, 
+                &missing_args, NULL);
         aparse_list_free(&missing_args);
     }
 
@@ -963,6 +968,7 @@ static aparse_status aparse__check_missing(
 }
 
 static void aparse__default_errcb(
+        const aparse_context* ctx,
         const aparse_status status, 
         const void* field1, 
         const void* field2, 
@@ -1003,7 +1009,7 @@ static void aparse__default_errcb(
         {
             const aparse_arg* arg = field1;
             const char* cargv = field2;
-            aparse_library_error("value '%s' is too large for argument '%s'",
+            aparse__lib__error("value '%s' is too large for argument '%s'",
                                      cargv, arg->longopt ? arg->longopt : arg->shortopt);
             break;
         }
@@ -1012,17 +1018,17 @@ static void aparse__default_errcb(
             const aparse_arg* arg = field1;
             const char* cargv = field2;
             if(arg->type & APARSE_ARG_TYPE_FLOAT)
-                aparse_library_warn("value '%s' underflows precision argument '%s'",
+                aparse__lib__warn("value '%s' underflows precision argument '%s'",
                                          cargv, arg->longopt ? arg->longopt : arg->shortopt);
             else
-                aparse_library_error("value '%s' underflows argument '%s'",
+                aparse__lib__error("value '%s' underflows argument '%s'",
                                          cargv, arg->longopt ? arg->longopt : arg->shortopt);
             break;
         }
         case APARSE_STATUS_MISSING_POSITIONAL:
         {
-            const aparse_list* args = field2;
-            aparse__print_usage();
+            const aparse_list* args = field1;
+            aparse__print_usage(ctx);
             fprintf(stderr, "%s: " __aparse_error_label ": the following arguments are required: ", __aparse_progname);
             int printed = 0;
             for (size_t i = 0; i < args->size; i++) 
@@ -1039,7 +1045,7 @@ static void aparse__default_errcb(
         {
             const aparse_list* args = field1;
             const char* cargv = field2;
-            aparse__print_usage();
+            aparse__print_usage(ctx);
             fprintf(stderr, "%s: " __aparse_error_label ": invalid choice: '%s' (choose from ", __aparse_progname, cargv);
             aparse_arg* a = args->ptr;
             for(size_t i = 0; i < args->size; i++, a++)
@@ -1050,14 +1056,14 @@ static void aparse__default_errcb(
         case APARSE_STATUS_NULL_POINTER:
         {
             const aparse_arg* arg = field1;
-            aparse_library_warn("non-null pointers was expected of argument '%s', skipped.",
+            aparse__lib__warn("non-null pointers was expected of argument '%s', skipped.",
                 arg->longopt ? arg->longopt : arg->shortopt);
             break;
         }
         case APARSE_STATUS_INVALID_TYPE:
         {
             const aparse_arg* arg = field1;
-            aparse_library_error("invalid argument type: 0x%04X of argument '%s'",
+            aparse__lib__error("invalid argument type: 0x%04X of argument '%s'",
                 arg->type, arg->longopt ? arg->longopt : arg->shortopt);
             break;
         }
@@ -1065,7 +1071,7 @@ static void aparse__default_errcb(
         {
             const aparse_arg* arg = field1;
             const int size = *(const int*)field2;
-            aparse_library_error("invalid argument size: %d bytes of argument '%s'",
+            aparse__lib__error("invalid argument size: %d bytes of argument '%s'",
                 size, arg->longopt ? arg->longopt : arg->shortopt);
             break;
         }
@@ -1073,27 +1079,33 @@ static void aparse__default_errcb(
         {
             const aparse_arg* arg = field1;
             const int index = *(const int*)field2;
-            aparse_library_error("layout of \"%s\" at index %d was invalid",
+            aparse__lib__error("layout of \"%s\" at index %d was invalid",
                     arg->longopt, index);
             break;
         }
         case APARSE_STATUS_ALLOC_FAILURE:
         {
-            aparse_library_error("failed to allocate memory for parsing process, retry again.");
+            aparse__lib__error("failed to allocate memory for parsing process, retry again.");
             break;
         }
         case APARSE_STATUS_UNHANDLED:
         {
             const aparse_arg* arg = field1;
-            aparse_library_error("unhandled %s size: %zu bytes of argument: '%s'",
+            aparse__lib__error("unhandled %s size: %zu bytes of argument: '%s'",
                 arg->type & APARSE_ARG_TYPE_FLOAT ? "float" : "integer",
                 arg->size, arg->longopt ? arg->longopt : arg->shortopt
             );
             break;
         }
+
+        case APARSE_STATUS_TOO_DEEP:
+        {
+            aparse__lib__error("parser nesting depth exceeded the limit");
+            break;
+        }
         default:
         {
-            aparse_library_error("unhandled error message");
+            aparse__lib__error("unhandled error message");
             break;
         }
     }
@@ -1103,9 +1115,9 @@ static void aparse__print_help(
         aparse_arg* main_args,
         aparse__context_t *ctx) 
 {
-    aparse__print_usage();
+    aparse__print_usage(ctx);
     printf("\n");
-    if(root_args == current_args) 
+    if(ctx->stack_top == 1) 
     {
         if(aparse__desc)
             printf("%s\n\n", aparse__desc);
@@ -1275,54 +1287,49 @@ static void aparse__print_subcmds(
     printf("}");
 }
 
-static bool aparse__print_usage_before_r(
-        aparse_arg* args,
-        aparse_arg* target,
-        aparse_list* strs)
+static void aparse__print_usage_before(
+        const aparse_context *ctx) 
 {
-    if (!args)
-        return false;
+    int idx = 0;
+    aparse_arg *arg = NULL;
 
-    if (args == target)
-        return true;
-
-    aparse__tillend(p, args)
+    for(;;)
     {
-        if (!aparse__is_positional(p))
-            continue;
+        bool found = false;
+        if(idx >= ctx->stack_top - 1)
+            break;
 
-        aparse_list_add(strs, &p->longopt);
-
-        /* if this is the target, stop immediately */
-        if (p == target)
-            return true;
-
-        /* recurse only into this branch */
-        if (p->subargs)
+        arg = ctx->stack[idx];
+        for(; aparse_arg_nend(arg); arg++)
         {
-            if (aparse__print_usage_before_r(p->subargs, target, strs))
-                return true;
+            if(!aparse__is_positional(arg))
+                continue;
+
+            if(aparse__is_argument(arg))
+                printf("%s ", arg->longopt);
+            else
+            {
+                aparse__foreach(subcmd, arg)
+                {
+                    if(subcmd->subargs == ctx->stack[idx + 1])
+                    {
+                        idx++;
+                        found = true;
+                        printf("%s ", subcmd->longopt);
+                        break;
+                    }
+                }
+
+                if(found)
+                    break;
+            }
         }
 
-        strs->size--;
+        // unlikely, this meant that stack[idx] and 
+        // stack[idx + 1] has no relation
+        if(!found)
+            break;
     }
-
-    return false;
-}
-
-static void aparse_print_usage_before(
-        aparse_arg* root, 
-        aparse_arg* target) 
-{
-    aparse_list strs = {.itemsz = sizeof(const char *)};
-    aparse__print_usage_before_r(root, target, &strs);
-    for (size_t i = 0; i < strs.size; i++) 
-    {
-        const char* entry = aparse_list_get(&strs, const char*, i);
-        printf("%s ", entry);
-    }
-
-    aparse_list_free(&strs);
 }
 
 static void aparse_print_usage_after(aparse_arg* args)
@@ -1363,11 +1370,12 @@ static void aparse_print_usage_after(aparse_arg* args)
     printf("\n");
 }
 
-static void aparse__print_usage(void) 
+static void aparse__print_usage(
+        const aparse_context *ctx) 
 {
     printf("usage: %s ", __aparse_progname);
-    aparse_print_usage_before(root_args, current_args);
-    aparse_print_usage_after(current_args);
+    aparse__print_usage_before(ctx);
+    aparse_print_usage_after(ctx->stack[ctx->stack_top - 1]);
 }
 
 static void aparse__reset_state(
@@ -1491,7 +1499,6 @@ static int aparse__get_term_width(void)
             GetConsoleScreenBufferInfo(h, &csbi))
         {
             width = csbi.srWindow.Right - csbi.srWindow.Left + 1;
-
             if (width > 0)
                 return width;
         }

@@ -330,17 +330,17 @@ enum aparse_arg_types_e
 typedef enum aparse_arg_types_e aparse_arg_types;
 
 /**
- * @struct aparse_arg_s
+ * @struct aparse_arg
  * @brief Describes a single argument, option, or subparser definition.
  *
- * The `aparse_arg_s` structure defines the metadata for each command-line
+ * The `aparse_arg` structure defines the metadata for each command-line
  * argument or subparser, including its option names, data type, storage
  * pointer, and parsing behavior.
  *
  * The meaning of certain members depends on the argument type
  * (see @ref aparse_arg_types).
  */
-struct aparse_arg_s 
+typedef struct aparse_arg
 {
     /**
      * @brief The short option name (e.g., "-h") for optional arguments.
@@ -432,7 +432,7 @@ struct aparse_arg_s
             /**
              * @brief Array of subarguments used in the subcommand.
              */
-            struct aparse_arg_s* subargs;
+            struct aparse_arg* subargs;
 
             /**
              * @brief Handler function called after successful subparser parsing.
@@ -467,18 +467,13 @@ struct aparse_arg_s
             size_t layout_size;
         };
     };
-};
-
-/** @typedef aparse_arg
- * @brief Type alias for @ref aparse_arg_s.
- */
-typedef struct aparse_arg_s aparse_arg;
+} aparse_arg;
 
 /**
- * @enum aparse_status_e
- * @brief Status codes returned by aparse operations or reported to error callbacks.
+ * @enum aparse_status
+ * @brief Status codes reported to error callbacks.
  */
-enum aparse_status_e
+typedef enum aparse_status
 {
     APARSE_STATUS_OK = 0,               /**< Parsing succeeded with no errors. */
     
@@ -501,13 +496,18 @@ enum aparse_status_e
 
     APARSE_STATUS_ALLOC_FAILURE,        /**< Memory allocation failed. */
     APARSE_STATUS_UNHANDLED,            /**< Unhandled type of argument. */
-    __APARSE_STATUS_ENUM_END__          /**< The marker for the end of aparse_status. THIS MUST BE AT THE END */
-};
+    APARSE_STATUS_TOO_DEEP,             /**< Parser nesting depth exceeded the limit */
 
-/** @typedef aparse_status
- * @brief Type alias for @ref aparse_status_e.
+    __APARSE_STATUS_ENUM_END__          /**< The marker for the end of aparse_status. THIS MUST BE AT THE END */
+} aparse_status;
+
+/**
+ * @brief Opaque parsing context.
+ *
+ * Contains the internal state of the parser and may be passed to
+ * callbacks for accessing parser-related information.
  */
-typedef enum aparse_status_e aparse_status;
+typedef struct aparse_context aparse_context;
 
 /**
  * @brief Error callback function type for reporting parsing issues.
@@ -528,7 +528,7 @@ typedef enum aparse_status_e aparse_status;
  * | ::APARSE_STATUS_INVALID_VALUE      | `current_arg`          | `current_argv`         | Argument definition and invalid value string.     |
  * | ::APARSE_STATUS_OVERFLOW           | `current_arg`          | `current_argv`         | Numeric argument and overflowing value string.    |
  * | ::APARSE_STATUS_UNDERFLOW          | `current_arg`          | `current_argv`         | Numeric argument and underflowing value string.   |
- * | ::APARSE_STATUS_MISSING_POSITIONAL | `current_arg`          | `required_args`        | Missing positional argument definition.           |
+ * | ::APARSE_STATUS_MISSING_POSITIONAL | `required_args`        | `NULL`                 | Missing positional argument definition.           |
  * | ::APARSE_STATUS_INVALID_SUBCOMMAND | `parser_subargs`       | `current_argv`         | Invalid subcommand name.                          |
  * | ::APARSE_STATUS_NULL_POINTER       | `current_arg`          | `NULL`                 | Invalid NULL pointer in user argument definition. |
  * | ::APARSE_STATUS_INVALID_TYPE       | `current_arg`          | `NULL`                 | Type mismatch in argument definition.             |
@@ -536,6 +536,7 @@ typedef enum aparse_status_e aparse_status;
  * | ::APARSE_STATUS_INVALID_LAYOUT     | `current_arg`          | `index`                | The layout was invalid at index                   |
  * | ::APARSE_STATUS_ALLOC_FAILURE      | `NULL`                 | `NULL`                 | Memory allocation failed inside parser.           |
  * | ::APARSE_STATUS_UNHANDLED          | `current_arg`          | `NULL`                 | An unhandled type of argument.                    |
+ * | ::APARSE_STATUS_TOO_DEEP           | `NULL`                 | `NULL`                 | Parser nesting depth exceeded the limit           |
  *
  * - `const aparse_list* unknown_args  `: An aparse_list refer to a list of arguments. `unknown_args.ptr` should be converted into `aparse_arg*`
  * - `const aparse_arg*  current_arg   `: An aparse_arg* refer to the currently processed argument.
@@ -546,6 +547,7 @@ typedef enum aparse_status_e aparse_status;
  * - `const int*         index         `: The base index of current entry inside `current_arg.data_layout`
  */
 typedef void (*aparse_error_callback)(
+        const aparse_context *ctx,
         const aparse_status status, 
         const void* field1, 
         const void* field2, 

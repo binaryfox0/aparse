@@ -111,11 +111,16 @@ static int spawn_process(
 
 static aparse_status g_last_status = APARSE_STATUS_OK;
 static void error_callback(
+        const aparse_context *ctx,
         const aparse_status status, 
         const void* field1, 
         const void* field2, 
         void *userdata)
 {
+    (void)ctx;
+    (void)field1;
+    (void)field2;
+
     if(*(int*)userdata)
         error("%s: %s", __func__, aparse_error_msg(status));
     g_last_status = status;
