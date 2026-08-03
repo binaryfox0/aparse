@@ -127,7 +127,7 @@ static void error_callback(
 }
 
 typedef struct copy_data { char src[32], dest[32]; } copy_data;
-static void dummy_command(const aparse_arg *arg, void* data) 
+static void copy_command(const aparse_arg *arg, void* data) 
 { 
     (void)arg;
     (void)data; 
@@ -155,7 +155,7 @@ int main(int argc, char** argv)
         aparse_arg_end_marker
     };
     aparse_arg command[] = {
-        aparse_arg_subparser("copy", copy_subargs, dummy_command, 
+        aparse_arg_subparser("copy", copy_subargs, copy_command, 
                 buffer, sizeof(buffer), 0, copy_data, src, dest),
         aparse_arg_end_marker
     };
@@ -180,6 +180,14 @@ int main(int argc, char** argv)
         aparse_arg_number("num", 
                 buffer, sizeof(buffer[0]), 
                 APARSE_ARG_TYPE_UNSIGNED, 0),
+        aparse_arg_end_marker
+    };
+
+    aparse_arg string_args[] = {
+        aparse_arg_string(
+                "string",
+                buffer, 32, 
+                NULL),
         aparse_arg_end_marker
     };
 
@@ -250,13 +258,39 @@ int main(int argc, char** argv)
             .hash = BUFFER_ZEROED_HASH
         },
         {
-            .name="valid-cmd", 
-            .argc=4, 
-            .argv = (const char*[]){"tests", "copy", "fox", "binary"},
-            .args = args_1, 
+            .name = "u64-leading-plus", 
+            .argc = 2, 
+            .argv = (const char*[]){"tests", "+42"}, 
+            .args = u64_args, 
             .expected = APARSE_STATUS_OK,
-            .hash = 0xA0A33A83
-        },    
+            .hash = 0xC0D8D5EF
+        },
+        {
+            .name = "string-valid", 
+            .argc = 2, 
+            .argv = (const char*[]){
+                "tests", 
+                "abcdabcdabcdabcd"
+                "abcdabcdabcdabc"
+            }, 
+            .args = string_args, 
+            .expected = APARSE_STATUS_OK,
+            .hash = 0x15808959
+        },
+        {
+            .name = "string-trunc", 
+            .argc = 2, 
+            .argv = (const char*[]){
+                "tests", 
+                "abcdabcdabcdabcd"
+                "abcdabcdabcdabcd"
+                "abcdabcdabcdabcd"
+                "abcdabcdabcdabcd"
+            }, 
+            .args = string_args, 
+            .expected = APARSE_STATUS_OK,
+            .hash = 0x15808959
+        }
     };
 
     if(!strcmp(test_name, "all"))

@@ -24,17 +24,25 @@ int main(int argc, char** argv) {
     };
     aparse_arg main_args[] = {
         aparse_arg_number(
-                "number", &number, sizeof(number), 
+                "number", 
+                &number, sizeof(number), 
                 APARSE_ARG_TYPE_SIGNED, "Just a number"),
         // array_size=0: take all argument after it. library automatically allocated memory for it
         // element_size=0: means the string have no size limitation
         aparse_arg_array(
-                "strings", &strings, sizeof(strings), 0, 
-                APARSE_ARG_TYPE_STRING, 0, "An array of strings"),
-        aparse_arg_option("-v", "--verbose", &verbose, 
-                sizeof(verbose), APARSE_ARG_TYPE_BOOL, "Toggle verbosity"),
-        aparse_arg_option("-c", "--constant", &constant,
-                sizeof(constant), APARSE_ARG_TYPE_FLOAT, lorem),
+                "strings", 
+                &strings, sizeof(strings), 
+                0, 
+                APARSE_ARG_TYPE_STRING, 0, 
+                "An array of strings"),
+        aparse_arg_option(
+                "-v", "--verbose", 
+                &verbose, sizeof(verbose), 
+                APARSE_ARG_TYPE_BOOL, "Toggle verbosity"),
+        aparse_arg_option(
+                "-c", "--constant",
+                &constant, sizeof(constant), 
+                APARSE_ARG_TYPE_FLOAT, lorem),
         aparse_arg_end_marker
     };
 

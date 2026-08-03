@@ -57,6 +57,7 @@ function(target_add_strict_flags target_name)
             -Wdisabled-optimization
             -Wno-unused-parameter
             -Wno-parentheses
+
             -Wno-variadic-macro-arguments-omitted
             -Wno-gnu-zero-variadic-macro-arguments
         >

@@ -31,90 +31,57 @@ SOFTWARE.
 
 #include <aparse_list.h>
 
-/**
- * @def APARSE_INLINE
- * @brief Cross-compiler inline function specifier.
- *
- * This macro ensures that functions are always inlined when possible,
- * using compiler-specific attributes.
- *
- * - On **MSVC**, it expands to `__forceinline`.
- * - On **non-MSVC compilers** (GCC, Clang, etc.), it expands to
- *   `static inline __attribute__((always_inline))`.
- *
- * @note
- * This macro should be used in internal headers or performance-critical
- * functions where inlining is required for efficiency.
- *
- * @warning
- * Forcing inlining may increase binary size if used excessively.
- *
- * @see https://learn.microsoft.com/en-us/cpp/cpp/inline-functions-cpp  
- * @see https://gcc.gnu.org/onlinedocs/gcc/Common-Function-Attributes.html#index-always_005finline-function-attribute
- */
-#if defined(_MSC_VER)
-#   define APARSE_INLINE __forceinline
-#else
-#   define APARSE_INLINE static inline __attribute__((always_inline))
-#endif
-
-
-/** 
- * @defgroup aparse_macros aparse's helper macros
- * @brief Macros to define parser arguments and subparsers.
- *
- * This module provides macros to simplify creating @ref aparse_arg_s entries,
- * automatically generating offset-size layouts, counting arguments, and mapping
- * functions over variadic arguments.
- *
- * @{
- */
-
-#if (defined(_MSVC_TRADITIONAL) && _MSVC_TRADITIONAL == 0) \
-        || defined(__GNUC__) || defined(__clang__)
-#   define __APARSE_VA_ARGS_EXPANSION_CONFORM
-
 /** @cond HIDDEN */
 
-#   define __aparse_cat_impl(a, b) a##b
+#if defined(_MSC_VER)
+#   define APARSE__INLINE __forceinline
+#else
+#   define APARSE__INLINE static inline __attribute__((always_inline))
+#endif
 
-#   define __aparse_count_args2( \
+#if !defined(APARSE_STDC_COMPLIANT) || \
+    (defined(_MSVC_TRADITIONAL) && _MSVC_TRADITIONAL == 0) \
+        || defined(__GNUC__) || defined(__clang__)
+
+#   define APARSE__CAT_IMPL(a, b) a##b
+#   define APARSE__CAT(a, b) APARSE__CAT_IMPL(a, b)
+
+#   define APARSE__COUNT_ARGS2( \
         _0, _1, _2, _3, _4, _5, _6, _7, _8, \
         _9, _10,_11,_12,_13,_14,_15,_16,N,...) N
-#   define __aparse_count_args1(...) \
-    __aparse_count_args2(dummy, ##__VA_ARGS__, \
-        16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0)
-#define __aparse_count_args(...) \
-    __aparse_count_args1(__VA_ARGS__)
+#   define APARSE__COUNT_ARGS1(...) \
+        APARSE__COUNT_ARGS2(dummy, ##__VA_ARGS__, \
+            16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0)
+#   define APARSE__COUNT_ARGS(...) \
+        APARSE__COUNT_ARGS1(__VA_ARGS__)
 
-#   define __aparse_map_0(...)           0
-#   define __aparse_map_1(m, a, x)       m(a, x)
-#   define __aparse_map_2(m, a, x, ...)  m(a, x), __aparse_map_1(m, a, __VA_ARGS__)
-#   define __aparse_map_3(m, a, x, ...)  m(a, x), __aparse_map_2(m, a, __VA_ARGS__)
-#   define __aparse_map_4(m, a, x, ...)  m(a, x), __aparse_map_3(m, a, __VA_ARGS__)
-#   define __aparse_map_5(m, a, x, ...)  m(a, x), __aparse_map_4(m, a, __VA_ARGS__)
-#   define __aparse_map_6(m, a, x, ...)  m(a, x), __aparse_map_5(m, a, __VA_ARGS__)
-#   define __aparse_map_7(m, a, x, ...)  m(a, x), __aparse_map_6(m, a, __VA_ARGS__)
-#   define __aparse_map_8(m, a, x, ...)  m(a, x), __aparse_map_7(m, a, __VA_ARGS__)
-#   define __aparse_map_9(m, a, x, ...)  m(a, x), __aparse_map_8(m, a, __VA_ARGS__)
-#   define __aparse_map_10(m, a, x, ...) m(a, x), __aparse_map_9(m, a, __VA_ARGS__)
-#   define __aparse_map_11(m, a, x, ...) m(a, x), __aparse_map_10(m, a, __VA_ARGS__)
-#   define __aparse_map_12(m, a, x, ...) m(a, x), __aparse_map_11(m, a, __VA_ARGS__)
-#   define __aparse_map_13(m, a, x, ...) m(a, x), __aparse_map_12(m, a, __VA_ARGS__)
-#   define __aparse_map_14(m, a, x, ...) m(a, x), __aparse_map_13(m, a, __VA_ARGS__)
-#   define __aparse_map_15(m, a, x, ...) m(a, x), __aparse_map_14(m, a, __VA_ARGS__)
-#   define __aparse_map_16(m, a, x, ...) m(a, x), __aparse_map_15(m, a, __VA_ARGS__)
+#   define APARSE__MAP_0(...)           0
+#   define APARSE__MAP_1(m, a, x)       m(a, x)
+#   define APARSE__MAP_2(m, a, x, ...)  m(a, x), APARSE__MAP_1(m, a, __VA_ARGS__)
+#   define APARSE__MAP_3(m, a, x, ...)  m(a, x), APARSE__MAP_2(m, a, __VA_ARGS__)
+#   define APARSE__MAP_4(m, a, x, ...)  m(a, x), APARSE__MAP_3(m, a, __VA_ARGS__)
+#   define APARSE__MAP_5(m, a, x, ...)  m(a, x), APARSE__MAP_4(m, a, __VA_ARGS__)
+#   define APARSE__MAP_6(m, a, x, ...)  m(a, x), APARSE__MAP_5(m, a, __VA_ARGS__)
+#   define APARSE__MAP_7(m, a, x, ...)  m(a, x), APARSE__MAP_6(m, a, __VA_ARGS__)
+#   define APARSE__MAP_8(m, a, x, ...)  m(a, x), APARSE__MAP_7(m, a, __VA_ARGS__)
+#   define APARSE__MAP_9(m, a, x, ...)  m(a, x), APARSE__MAP_8(m, a, __VA_ARGS__)
+#   define APARSE__MAP_10(m, a, x, ...) m(a, x), APARSE__MAP_9(m, a, __VA_ARGS__)
+#   define APARSE__MAP_11(m, a, x, ...) m(a, x), APARSE__MAP_10(m, a, __VA_ARGS__)
+#   define APARSE__MAP_12(m, a, x, ...) m(a, x), APARSE__MAP_11(m, a, __VA_ARGS__)
+#   define APARSE__MAP_13(m, a, x, ...) m(a, x), APARSE__MAP_12(m, a, __VA_ARGS__)
+#   define APARSE__MAP_14(m, a, x, ...) m(a, x), APARSE__MAP_13(m, a, __VA_ARGS__)
+#   define APARSE__MAP_15(m, a, x, ...) m(a, x), APARSE__MAP_14(m, a, __VA_ARGS__)
+#   define APARSE__MAP_16(m, a, x, ...) m(a, x), APARSE__MAP_15(m, a, __VA_ARGS__)
 
-#   define __aparse_offsetof_and_sizeof(s, m) offsetof(s, m), sizeof(((s*)0)->m )
-#   define __aparse_offsetofs(s, ...) { __aparse_expand(__aparse_map(__aparse_offsetof_and_sizeof, s, __VA_ARGS__)) }
+#   define APARSE__OFFSETOF_AND_SIZEOF(s, m) offsetof(s, m), sizeof(((s*)0)->m )
+#   define APARSE__OFFSETOFS(s, ...) { APARSE__EXPAND(APARSE__MAP(APARSE__OFFSETOF_AND_SIZEOF, s, __VA_ARGS__)) }
 
-#   define __aparse_expand(...) __VA_ARGS__
-#   define __aparse_cat(a, b) __aparse_cat_impl(a, b)
-#   define __aparse_map(m, a, ...) \
-    __aparse_cat(__aparse_map_, __aparse_count_args(__VA_ARGS__))(m, a, __VA_ARGS__)
+#   define APARSE__EXPAND(...) __VA_ARGS__
+#   define APARSE__MAP(m, a, ...) \
+    APARSE__CAT(APARSE__MAP_, APARSE__COUNT_ARGS(__VA_ARGS__))(m, a, __VA_ARGS__)
 
-#   define __aparse_first_arg(a, ...) a
-#   define __aparse_not_first_arg(a, ...) __VA_ARGS__
+#   define APARSE__FIRST_ARG(a, ...) a
+#   define APARSE__NOT_FIRST_ARG(a, ...) __VA_ARGS__
 
 
 /** @endcond */
@@ -143,7 +110,14 @@ SOFTWARE.
  *     int port;
  *     char *name;
  * };
- * aparse_arg_subparser("config", config_subargs, handle_config, "Config subparser", config, port, name);
+ * aparse_arg_subparser(
+ *          "config", 
+ *          config_subargs, 
+ *          handle_config, 
+ *          NULL,
+ *          0,
+ *          "Config subparser", 
+ *          config, port, name);
  * @endcode
  */
 #   define aparse_arg_subparser( \
@@ -162,83 +136,86 @@ SOFTWARE.
                (size), \
                (help), \
                (size_t[]) \
-                    __aparse_offsetofs( \
-                        __aparse_first_arg(__VA_ARGS__), \
-                        __aparse_not_first_arg(__VA_ARGS__)), \
-                __aparse_count_args(__aparse_not_first_arg(__VA_ARGS__)) \
+                    APARSE__OFFSETOFS( \
+                        APARSE__FIRST_ARG(__VA_ARGS__), \
+                        APARSE__NOT_FIRST_ARG(__VA_ARGS__)), \
+                APARSE__COUNT_ARGS(APARSE__NOT_FIRST_ARG(__VA_ARGS__)) \
         )
-#else
-#   pragma message("Warning: This compiler wasn't conformed to __VA_ARGS__ in C standard")
 #endif
 
 /** @} */ // end of aparse_macros
 
 /** @cond HIDDEN */
+#ifndef APARSE_NO_ANSI_ESCAPE
+#    ifdef _WIN32
+#       include <sdkddkver.h>
+#       if defined(NTDDI_VERSION) && (NTDDI_VERSION >= NTDDI_WIN10_TH2)
+#           define APARSE__ANSI_ESCAPE(x) x
+#       else
+#           define APARSE__ANSI_ESCAPE(x)
+#       endif
+#    else
+#       define APARSE__ANSI_ESCAPE(x) x
+#    endif
+#endif
 
-// A trick to deal with Microsoft Visual Studio Compiler macro expansion (indirection trick)
-#define __aparse_printf_impl(fmt, ...) printf(fmt, ##__VA_ARGS__)
-#define __aparse_printf(fmt, ...) __aparse_printf_impl(fmt, ##__VA_ARGS__)
-#define __aparse_fprintf_impl(fp, fmt, ...) fprintf(fp, fmt, ##__VA_ARGS__)
-#define __aparse_fprintf(fp, fmt, ...) __aparse_fprintf_impl(fp, fmt, ##__VA_ARGS__)
+#define APARSE__DEBUG_LABEL \
+    APARSE__ANSI_ESCAPE("\x1b[1;36m") "debug" APARSE__ANSI_ESCAPE("\x1b[0m")
+#define APARSE__INFO_LABEL  \
+    APARSE__ANSI_ESCAPE("\x1b[1;34m") "info"  APARSE__ANSI_ESCAPE("\x1b[0m")
+#define APARSE__WARN_LABEL  \
+    APARSE__ANSI_ESCAPE("\x1b[1;33m") "warn"  APARSE__ANSI_ESCAPE("\x1b[0m") 
+#define APARSE__ERROR_LABEL \
+    APARSE__ANSI_ESCAPE("\x1b[1;31m") "error" APARSE__ANSI_ESCAPE("\x1b[0m") 
 
-#define __aparse_debug_label __aparse_ansies("\x1b[1;36m") "debug" __aparse_ansies("\x1b[0m")
-#define __aparse_info_label  __aparse_ansies("\x1b[1;34m") "info"  __aparse_ansies("\x1b[0m")
-#define __aparse_warn_label  __aparse_ansies("\x1b[1;33m") "warn"  __aparse_ansies("\x1b[0m") 
-#define __aparse_error_label __aparse_ansies("\x1b[1;31m") "error" __aparse_ansies("\x1b[0m") 
+#if defined(__GNUC__) || defined(__clang__)
+#   define APARSE__PRINTF(fmt_index, arg_index) \
+        __attribute__((format(printf, fmt_index, arg_index)))
+#   define APARSE__PRINTF_FMT
+#elif defined(_MSC_VER)
+#   define APARSE__PRINTF(fmt_index, arg_index)
+#   define APARSE__PRINTF_FMT _Printf_format_string_
+#else
+#   define APARSE__PRINTF(fmt_index, arg_index)
+#   define APARSE__PRINTF_FMT
+#endif
 /** @endcond */
 
 /**
- * @brief Print informational message to stdere, with color if supported
- *
- * @param fmt to a null-terminated multibyte string specifying how to interpret the data
- * @param ... specifying data to print. Undefined behaviour if type mismatched, discarded if extraneous
- *
- * @note Should be used after calling \ref aparse_parse, otherwise program name will be `(null)`
+ * @brief Print informational message to stderr, with color if supported
  */
-#define aparse_prog_debug(fmt, ...) \
-    __aparse_fprintf(stderr, "%s: " __aparse_debug_label ": " fmt "\n", \
-            __aparse_progname, ##__VA_ARGS__)
+#define aparse_prog_debug(...) \
+    aparse_log(aparse_progname, APARSE__DEBUG_LABEL, __VA_ARGS__)
 
 /**
- * @brief Print informational message to stdere, with color if supported
- *
- * @param fmt to a null-terminated multibyte string specifying how to interpret the data
- * @param ... specifying data to print. Undefined behaviour if type mismatched, discarded if extraneous
- *
- * @note Should be used after calling \ref aparse_parse, otherwise program name will be `(null)`
+ * @brief Print informational message to stderr, with color if supported
  */
-#define aparse_prog_info(fmt, ...) \
-    __aparse_fprintf(stderr, "%s: " __aparse_info_label ": " fmt "\n", \
-            __aparse_progname, ##__VA_ARGS__)
+#define aparse_prog_info(...) \
+    aparse_log(aparse_progname, APARSE__DEBUG_LABEL, __VA_ARGS__)
 
 /**
  * @brief Print warning message to stderr, with color if supported
- *
- * @param fmt to a null-terminated multibyte string specifying how to interpret the data
- * @param ... specifying data to print. Undefined behaviour if type mismatched, discarded if extraneous
- *
- * @note Should be used after calling \ref aparse_parse, otherwise program name will be `(null)`
  */
-#define aparse_prog_warn(fmt, ...) \
-    __aparse_fprintf(stderr, "%s: " __aparse_warn_label ": " fmt "\n", \
-            __aparse_progname, ##__VA_ARGS__)
+#define aparse_prog_warn(...) \
+    aparse_log(aparse_progname, APARSE__DEBUG_LABEL, __VA_ARGS__)
 
 /**
  * @brief Print error message to stderr, with color if supported
- *
- * @param fmt to a null-terminated multibyte string specifying how to interpret the data
- * @param ... specifying data to print. Undefined behaviour if type mismatched, discarded if extraneous
- *
- * @note Should be used after calling \ref aparse_parse, otherwise program name will be `(null)`
  */
-#define aparse_prog_error(fmt, ...) \
-    __aparse_fprintf(stderr, "%s: " __aparse_error_label ": " fmt "\n", \
-            __aparse_progname, ##__VA_ARGS__)
+#define aparse_prog_error(...) \
+    aparse_log(aparse_progname, APARSE__DEBUG_LABEL, __VA_ARGS__)
 
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+extern const char* aparse_progname;
+APARSE__PRINTF(3, 4) void aparse_log(
+        const char *source,
+        const char *type,
+        APARSE__PRINTF_FMT const char *fmt,
+        ...);
 
 /**
  * @enum aparse_arg_types
@@ -559,66 +536,6 @@ typedef void (*aparse_error_callback)(
         const void* field2, 
         void *userdata);
 
-/** @cond INTERNAL */
-extern const char* __aparse_progname;
-/** @endcond */
-
-#if defined(_WIN32)
-/**
- * @def APARSE_PLATFORM_WIN32
- * @brief Platform detection macro for Windows systems.
- *
- * This macro is defined automatically when `_WIN32` is detected,
- * indicating that the build is targeting a Windows environment.
- *
- * It is used internally to enable Windows-specific code paths, such as
- * header inclusion (`<sdkddkver.h>`) or feature checks (e.g., `NTDDI_VERSION`).
- *
- * @note
- * - `_WIN32` is defined for both 32-bit and 64-bit Windows builds.
- * - This macro is not defined on Unix-like or POSIX platforms.
- *
- * @see https://learn.microsoft.com/en-us/cpp/preprocessor/predefined-macros
- */
-
-#   define APARSE_PLATFORM_WIN32
-#endif
-
-#ifdef APARSE_PLATFORM_WIN32
-#   include <sdkddkver.h>
-// Source:
-// - https://learn.microsoft.com/en-us/windows/win32/winprog/using-the-windows-headers?redirectedfrom=MSDN#macros-for-conditional-declarations
-// - https://en.wikipedia.org/wiki/ANSI_escape_code#DOS_and_Windows 
-#   if defined(NTDDI_VERSION) && (NTDDI_VERSION >= NTDDI_WIN10_TH2)
-/**
- * @brief Conditionally enables ANSI escape sequences on supported platforms.
- *
- * This macro is used to wrap ANSI color or style escape codes in a way
- * that prevents them from being emitted on Windows systems that do not
- * support virtual terminal sequences.
- *
- * On Unix-like systems, or on Windows 10 build 10586 (Version 1511, "TH2")
- * and newer, `__aparse_ansies(str)` expands to `str` directly.
- * On older Windows versions, it expands to nothing, effectively disabling
- * colored output.
- *
- * @param str The ANSI escape sequence string to include, e.g. `"\x1b[1;31m"`.
- *
- * @note
- * This macro uses `_WIN32` and `NTDDI_VERSION` to determine availability:
- * - If `_WIN32` is not defined → ANSI escape codes are always enabled.
- * - If `_WIN32` is defined but `NTDDI_VERSION < NTDDI_WIN10_TH2` → disabled.
- * - If `_WIN32` and `NTDDI_VERSION >= NTDDI_WIN10_TH2` → enabled.
- *
- * @see https://learn.microsoft.com/en-us/windows/console/console-virtual-terminal-sequences
- * @see https://en.wikipedia.org/wiki/ANSI_escape_code#DOS_and_Windows
- */
-#       define __aparse_ansies(str) str
-#   endif
-#else
-#   define __aparse_ansies(str) str
-#endif
-
 /**
  * @brief Create an option argument (flag with value).
  *
@@ -631,7 +548,7 @@ extern const char* __aparse_progname;
  *
  * @return Constructed ::aparse_arg definition.
  */
-APARSE_INLINE aparse_arg aparse_arg_option(
+APARSE__INLINE aparse_arg aparse_arg_option(
         const char* shortopt, 
         const char* longopt, 
         void* dest, 
@@ -664,7 +581,7 @@ APARSE_INLINE aparse_arg aparse_arg_option(
  *
  * @return A fully constructed ::aparse_arg definition for numeric positional arguments.
  */
-APARSE_INLINE aparse_arg aparse_arg_number(
+APARSE__INLINE aparse_arg aparse_arg_number(
         const char* name, 
         void* dest, 
         const size_t size, 
@@ -697,7 +614,7 @@ APARSE_INLINE aparse_arg aparse_arg_number(
  *
  * @note If @p size is 0, `dest` will be assigned with the string of argument (`const char*`)
  */
-APARSE_INLINE aparse_arg aparse_arg_string(
+APARSE__INLINE aparse_arg aparse_arg_string(
         const char* name, 
         void* dest, 
         const size_t size, 
@@ -740,7 +657,7 @@ APARSE_INLINE aparse_arg aparse_arg_string(
  * @note If `ptr` is not provided, aparse will automatically allocate a buffer based on the provided layout, enabling seamless usage without manual memory setup.
  * @attention Generally recommended to use ::aparse_arg_subparser
  */
-APARSE_INLINE aparse_arg aparse_arg_subparser_impl(
+APARSE__INLINE aparse_arg aparse_arg_subparser_impl(
         const char* name,
         aparse_arg* subargs, 
         const aparse_handler_t handler,
@@ -774,7 +691,7 @@ APARSE_INLINE aparse_arg aparse_arg_subparser_impl(
  *
  * @return A constructed ::aparse_arg definition representing the root parser.
  */
-APARSE_INLINE aparse_arg aparse_arg_parser(
+APARSE__INLINE aparse_arg aparse_arg_parser(
         const char* name, 
         aparse_arg* subparsers) 
 {
@@ -802,7 +719,7 @@ APARSE_INLINE aparse_arg aparse_arg_parser(
  *
  * @note If @p element_size is 0, the parser assumes an array of pointers (`char*`).
  */
-APARSE_INLINE aparse_arg aparse_arg_array(
+APARSE__INLINE aparse_arg aparse_arg_array(
         const char* name, 
         void* dest, 
         const size_t size, 
