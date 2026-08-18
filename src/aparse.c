@@ -24,10 +24,11 @@ SOFTWARE.
 
 #include "aparse.h"
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdarg.h>
 #include <string.h>
 #include <stdint.h>
-#include <stdlib.h>
-#include <stdio.h>
 #include <ctype.h>
 
 #include <errno.h>
