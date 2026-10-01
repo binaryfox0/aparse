@@ -764,7 +764,7 @@ APARSE__INLINE aparse_arg aparse_arg_array(
  * information will be discarded
  */
 static inline bool aparse_arg_nend(const aparse_arg* arg) {
-    return arg->longopt != 0 || arg->shortopt != 0;
+    return arg && (arg->longopt != 0 || arg->shortopt != 0);
 }
 
 /**
@@ -777,57 +777,39 @@ static inline bool aparse_arg_nend(const aparse_arg* arg) {
  * @param argc              Argument count (from `main`).
  * @param argv              Argument vector (from `main`).
  * @param args              Argument definition table, terminated with ::aparse_arg_end_marker.
- * @param dispatch_list_out Optional output for the list of dispatched function
+ * @param out_dispatch      Optional output list for delayed dispatch
  * @param program_desc      Optional program description for `--help` output (may be NULL).
  *
  * @return One of the ::aparse_status codes, typically ::APARSE_STATUS_OK on success.
  *
  * @note Errors and warnings can be intercepted using ::aparse_set_error_callback.
- * @note If `dispatch_list == NULL`, dispatched function will be executed immedieately after parsing complete
+ * @note If `out_dispatch == NULL`, dispatched function will be executed immedieately after parsing complete
  */
 aparse_status aparse_parse(
         const int argc, 
         char* const * argv, 
         aparse_arg* args, 
-        aparse_list* dispatch_list_out, 
+        aparse_list* out_dispatch, 
         const char* program_desc
 );
 
 /**
  * @brief Dispatch all queued handle
+ * Dispatch all handle with their respective constructed payload
  *
- * Dispatch all handle with their respective constructed payload, then
- * also freeing any resources related to payload
- *
- * @param dispatch_list The list of dispatched functions
+ * @param dispatch The list of dispatched functions
  */
-extern void aparse_dispatch_all(aparse_list* dispatch_list);
+extern void aparse_dispatch_all(aparse_list* dispatch);
 
 /**
- * @brief Check for the handle inside dispatch list
+ * @brief Free a dispatch list
  *
- * Check if the handle inside dispatch list was existed with given name,
- * normally it will be compared against `aparse_arg.longopt`
+ * Frees all resources owned by the dispatch list, including payloads
+ * allocated for subparsers when no user-provided payload was specified.
  *
- * @param name Name of dispatch handle to find
- *
- * @return If it wasn't existed in `dispatch_list`, return 1, otherwise return 0
+ * @param dispatch Dispatch list to free
  */
-extern int aparse_dispatch_contain(const aparse_list* dispatch_list, const char* name);
-
-/**
- * @brief Free a dispatch list without executing handlers
- *
- * Releases all resources associated with the dispatch list and its queued
- * handlers without invoking any handler functions. Any constructed payloads
- * stored in the list are freed.
- *
- * This function is typically used when argument parsing fails or when
- * execution of dispatched handlers is intentionally skipped.
- *
- * @param dispatch_list List of queued dispatch handlers to be freed
- */
-extern void aparse_dispatch_free(aparse_list* dispatch_list);
+extern void aparse_dispatch_free(aparse_list* dispatch);
 
 /**
  * @brief Set a global error callback for parser events.
