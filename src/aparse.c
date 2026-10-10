@@ -336,7 +336,7 @@ void aparse_dispatch_all(
         aparse__dispatch_t *entry = 
             &aparse_list_get(dispatch_list, aparse__dispatch_t, i);
 
-        entry->args->handler(entry->args, entry->payload);
+        entry->args->handler(entry->payload);
         aparse__destroy_payload(entry->args, entry->payload);
     }
 }

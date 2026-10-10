@@ -127,9 +127,8 @@ static void error_callback(
 }
 
 typedef struct copy_data { char src[32], dest[32]; } copy_data;
-static void copy_command(const aparse_arg *arg, void* data) 
+static void copy_command(void* data) 
 { 
-    (void)arg;
     (void)data; 
 }
 

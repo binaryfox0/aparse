@@ -308,11 +308,9 @@ typedef struct aparse_arg aparse_arg;
 
 /**
  * @brief Handler function called after successful subparser parsing.
- * 
- * @param arg  Pointer to `aparse_arg` contain information about the caller
  * @param data Pointer to the data structure described by @ref data_layout.
  */
-typedef void (*aparse_handler_t)(const aparse_arg *arg, void *data);
+typedef void (*aparse_handler_t)(void *data);
 
 /**
  * @struct aparse_arg
