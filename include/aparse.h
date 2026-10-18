@@ -355,7 +355,7 @@ typedef struct aparse_arg
      * Indicates whether the argument is a string, integer, array, subparser, etc.
      * See @ref aparse_arg_types for all possible values.
      */
-    aparse_arg_types type : 8;
+    aparse_arg_types type;
 
     /**
      * @brief Internal parser flags to track parsing process.
