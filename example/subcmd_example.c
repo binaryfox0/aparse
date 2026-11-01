@@ -140,10 +140,8 @@ int main(int argc, char **argv)
     };
     
     aparse_arg subcommand_list[] = {
-        aparse_arg_subparser("add", add_args, add_command,
-                NULL, 0,
-                "Add two integer together",
-                add_payload_t, a, b),
+        aparse_subparser_data("add", add_args, add_command,
+            "Add two integer together", add_payload_t, a, b),
         aparse_arg_subparser_impl("poly-surf", poly_surf_args, 
                 poly_surf_command, NULL, 0,
                 "Calculate a polygon surface area from given list of points", 
@@ -152,14 +150,14 @@ int main(int argc, char **argv)
                 poly_perm_command, NULL, 0,
                 "Calculate a polygon perimitter length from given list of points", 
                 (size_t[]){0, sizeof(aparse_list)}, 1),
-        aparse_arg_subparser("nothing", NULL, nothing_command,
-                NULL, 0, "This do nothing literally"),
+        aparse_subparser("nothing", NULL, nothing_command,
+            "This do nothing literally"),
         aparse_arg_end_marker
     };
     aparse_arg main_args[] = {
         aparse_arg_parser("command", subcommand_list),
-        aparse_arg_option(0, "--result-only", &g_result_only, sizeof(g_result_only),
-                APARSE_ARG_TYPE_BOOL, "Only print the result"),
+        aparse_option(0, "--result-only", &g_result_only,
+            "Only print the result"),
         aparse_arg_end_marker
     };
     if(aparse_parse(

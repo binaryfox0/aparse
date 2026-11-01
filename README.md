@@ -37,17 +37,17 @@ int main(int argc, char** argv) {
         aparse_arg_end_marker
     };
     aparse_arg command[] = {
-        aparse_arg_subparser("copy", copy_subargs, copy_command, "Copy file from source to destination", copy_data, src, dest),
+        aparse_subparser_data("copy", copy_subargs, copy_command, "Copy file from source to destination", copy_data, src, dest),
         aparse_arg_end_marker
     };
     aparse_arg main_args[] = {
         aparse_arg_parser("command", command),
-        aparse_arg_number("number", &number, sizeof(number), APARSE_ARG_TYPE_SIGNED, "Just a number"),
+        aparse_number("number", &number, "Just a number"),
         // array_size=0: take all argument after it. library automatically allocated memory for it
         // element_size=0: means the string have no size limitation
         aparse_arg_array("strings", &strings, 0, APARSE_ARG_TYPE_STRING, 0, "An array of strings"),
-        aparse_arg_option("-v", "--verbose", &verbose, sizeof(verbose), APARSE_ARG_TYPE_BOOL, "Toggle verbosity"),
-        aparse_arg_option("-c", "--constant", &constant, sizeof(constant), APARSE_ARG_TYPE_FLOAT, "Just a constant"),
+        aparse_option("-v", "--verbose", &verbose, "Toggle verbosity"),
+        aparse_option("-c", "--constant", &constant, "Just a constant"),
         aparse_arg_end_marker
     };
     printf("program: info: sizeof(copy_subargs): %lu, sizeof(command): %lu, sizeof(main_args): %lu, total: %lu\n",
@@ -67,6 +67,12 @@ int main(int argc, char** argv) {
     return 0;
 }
 ```
+
+In C11, `aparse_number` and `aparse_option` infer scalar size and type from a
+typed destination pointer. `aparse_subparser` creates a command without a
+payload; `aparse_subparser_data` creates one with an automatically allocated
+payload layout. Use the `aparse_arg_*` constructors when destinations are null,
+types or sizes are custom, or when defining arrays.
 
 ## Documentation
 [View](./DOCS.md) the document here.

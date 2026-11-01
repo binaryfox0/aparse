@@ -4,6 +4,7 @@ project(aparse LANGUAGES C)
 
 option(APARSE_BUILD_ASAN    "Build aparse with AddressSanitizer" OFF)
 option(APARSE_BUILD_EXAMPLE "Build aparse's examples & tests" OFF)
+option(APARSE_LOG_STDOUT    "Write aparse log messages to stdout" OFF)
 
 function(target_add_asan target_name)
     if(NOT APARSE_BUILD_ASAN)
@@ -66,6 +67,8 @@ endfunction()
 
 set(APARSE_SOURCES
     src/aparse.c
+    src/aparse_parse.c
+    src/aparse_help.c
     src/aparse_list.c
 )
 
@@ -73,6 +76,16 @@ add_library(aparse STATIC ${APARSE_SOURCES})
 
 target_include_directories(aparse PUBLIC include
 )
+
+if(APARSE_LOG_STDOUT)
+    target_compile_definitions(aparse PRIVATE APARSE_LOG_STDOUT)
+endif()
+
+if(MSVC)
+    target_compile_options(aparse PUBLIC
+        "$<$<COMPILE_LANGUAGE:C>:/std:c11>"
+    )
+endif()
 
 set_target_properties(aparse PROPERTIES
     C_STANDARD 11
@@ -97,7 +110,18 @@ if(APARSE_BUILD_EXAMPLE)
 
     target_add_asan(subcmd)
     target_add_strict_flags(subcmd)
-    add_executable(tests example/tests.c)
+
+    add_executable(help-output tests/help_output.c)
+    target_link_libraries(help-output PRIVATE aparse)
+    target_add_asan(help-output)
+    target_add_strict_flags(help-output)
+
+    add_executable(edge-cases tests/edge_cases.c)
+    target_link_libraries(edge-cases PRIVATE aparse)
+    target_add_asan(edge-cases)
+    target_add_strict_flags(edge-cases)
+
+    add_executable(tests tests/tests.c)
     target_link_libraries(tests PRIVATE aparse)
     target_add_asan(tests)
     target_add_strict_flags(tests)

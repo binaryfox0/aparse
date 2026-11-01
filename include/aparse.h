@@ -31,10 +31,14 @@ SOFTWARE.
 
 #include <aparse_list.h>
 
+#if defined(_MSC_VER)
+#   include <sal.h>
+#endif
+
 /** @cond HIDDEN */
 
 #if defined(_MSC_VER)
-#   define APARSE__INLINE __forceinline
+#   define APARSE__INLINE static __forceinline
 #else
 #   define APARSE__INLINE static inline __attribute__((always_inline))
 #endif
@@ -50,7 +54,7 @@ SOFTWARE.
         _0, _1, _2, _3, _4, _5, _6, _7, _8, \
         _9, _10,_11,_12,_13,_14,_15,_16,N,...) N
 #   define APARSE__COUNT_ARGS1(...) \
-        APARSE__COUNT_ARGS2(dummy, ##__VA_ARGS__, \
+    APARSE__COUNT_ARGS2(dummy, __VA_ARGS__, \
             16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0)
 #   define APARSE__COUNT_ARGS(...) \
         APARSE__COUNT_ARGS1(__VA_ARGS__)
@@ -120,6 +124,7 @@ SOFTWARE.
  *          config, port, name);
  * @endcode
  */
+#   ifndef __cplusplus
 #   define aparse_arg_subparser( \
         name, \
         subargs, \
@@ -141,7 +146,16 @@ SOFTWARE.
                         APARSE__NOT_FIRST_ARG(__VA_ARGS__)), \
                 APARSE__COUNT_ARGS(APARSE__NOT_FIRST_ARG(__VA_ARGS__)) \
         )
+
+#   define aparse_subparser_data(name, subargs, handle, help, ...) \
+        aparse_arg_subparser( \
+                (name), (subargs), (handle), NULL, 0, (help), __VA_ARGS__)
+#   endif
 #endif
+
+#define aparse_subparser(name, subargs, handle, help) \
+    aparse_arg_subparser_impl((name), (subargs), (handle), NULL, 0, \
+        (help), NULL, 0)
 
 /** @} */ // end of aparse_macros
 
@@ -157,6 +171,8 @@ SOFTWARE.
 #    else
 #       define APARSE__ANSI_ESCAPE(x) x
 #    endif
+#else
+#    define APARSE__ANSI_ESCAPE(x)
 #endif
 
 #define APARSE__DEBUG_LABEL \
@@ -554,15 +570,14 @@ APARSE__INLINE aparse_arg aparse_arg_option(
         const aparse_arg_types type, 
         const char* help) 
 {
-    return (aparse_arg){
-        .shortopt = shortopt, 
-        .longopt = longopt,
-        .type = type | 
-            APARSE_ARG_TYPE_ARGUMENT, 
-        .ptr = dest, 
-        .size = size, 
-        .help = help,
-    };
+    aparse_arg arg = {0};
+    arg.shortopt = shortopt;
+    arg.longopt = longopt;
+    arg.type = (aparse_arg_types)(type | APARSE_ARG_TYPE_ARGUMENT);
+    arg.ptr = dest;
+    arg.size = size;
+    arg.help = help;
+    return arg;
 }
 
 /**
@@ -586,15 +601,14 @@ APARSE__INLINE aparse_arg aparse_arg_number(
         const aparse_arg_types type, 
         const char* help) 
 {
-    return (aparse_arg){
-        .longopt = name, 
-        .ptr = dest, 
-        .size = size, 
-        .help = help,
-        .type = type | 
-            APARSE_ARG_TYPE_POSITIONAL | 
-            APARSE_ARG_TYPE_ARGUMENT
-    };    
+    aparse_arg arg = {0};
+    arg.longopt = name;
+    arg.ptr = dest;
+    arg.size = size;
+    arg.help = help;
+    arg.type = (aparse_arg_types)(
+        type | APARSE_ARG_TYPE_POSITIONAL | APARSE_ARG_TYPE_ARGUMENT);
+    return arg;
 }
 
 /**
@@ -618,15 +632,14 @@ APARSE__INLINE aparse_arg aparse_arg_string(
         const size_t size, 
         const char* help) 
 {
-    return (aparse_arg) {
-        .longopt = name, 
-        .ptr = dest, 
-        .size = size,
-        .help = help,
-        .type = APARSE_ARG_TYPE_STRING |
-            APARSE_ARG_TYPE_POSITIONAL |
-            APARSE_ARG_TYPE_ARGUMENT
-    };
+    aparse_arg arg = {0};
+    arg.longopt = name;
+    arg.ptr = dest;
+    arg.size = size;
+    arg.help = help;
+    arg.type = (aparse_arg_types)(APARSE_ARG_TYPE_STRING |
+        APARSE_ARG_TYPE_POSITIONAL | APARSE_ARG_TYPE_ARGUMENT);
+    return arg;
 }
 
 /**
@@ -665,17 +678,17 @@ APARSE__INLINE aparse_arg aparse_arg_subparser_impl(
         const size_t *data_layout, 
         const size_t layout_size
 ) {
-    return (aparse_arg) {
-        .longopt = name, 
-        .subargs = subargs, 
-        .handler = handler,
-        .data_layout = data_layout, 
-        .layout_size = layout_size,
-        .ptr = buffer, 
-        .size = size,
-        .help = help,
-        .type = APARSE_ARG_TYPE_SUBPARSER 
-    };
+    aparse_arg arg = {0};
+    arg.longopt = name;
+    arg.subargs = subargs;
+    arg.handler = handler;
+    arg.data_layout = data_layout;
+    arg.layout_size = layout_size;
+    arg.ptr = buffer;
+    arg.size = size;
+    arg.help = help;
+    arg.type = APARSE_ARG_TYPE_SUBPARSER;
+    return arg;
 }
 
 /**
@@ -693,11 +706,11 @@ APARSE__INLINE aparse_arg aparse_arg_parser(
         const char* name, 
         aparse_arg* subparsers) 
 {
-    return (aparse_arg){
-        .longopt = name, 
-        .subargs = subparsers, 
-        .type = APARSE_ARG_TYPE_POSITIONAL
-    };
+    aparse_arg arg = {0};
+    arg.longopt = name;
+    arg.subargs = subparsers;
+    arg.type = APARSE_ARG_TYPE_POSITIONAL;
+    return arg;
 }
 
 /**
@@ -725,16 +738,17 @@ APARSE__INLINE aparse_arg aparse_arg_array(
         const aparse_arg_types type, 
         const size_t element_size, 
         const char* help) {
-    return (aparse_arg){
-        .longopt = name, .ptr = dest, .size = size,
-        .array_size = array_size / (element_size == 0 ? sizeof(char*) : element_size),
-        .type = 
-            APARSE_ARG_TYPE_ARGUMENT | 
-            APARSE_ARG_TYPE_ARRAY | 
-            APARSE_ARG_TYPE_POSITIONAL | 
-            type,
-        .help = help, .element_size = element_size
-    };
+    aparse_arg arg = {0};
+    arg.longopt = name;
+    arg.ptr = dest;
+    arg.size = size;
+    arg.array_size = array_size /
+        (element_size == 0 ? sizeof(char*) : element_size);
+    arg.type = (aparse_arg_types)(APARSE_ARG_TYPE_ARGUMENT |
+        APARSE_ARG_TYPE_ARRAY | APARSE_ARG_TYPE_POSITIONAL | type);
+    arg.help = help;
+    arg.element_size = element_size;
+    return arg;
 }
 
 /**
@@ -751,7 +765,11 @@ APARSE__INLINE aparse_arg aparse_arg_array(
  * };
  * @endcode
  */
-#define aparse_arg_end_marker (aparse_arg){0}
+#ifdef __cplusplus
+#   define aparse_arg_end_marker aparse_arg{}
+#else
+#   define aparse_arg_end_marker (aparse_arg){0}
+#endif
 
 /**
  * @brief Check if the current aparse_arg was an end marker
@@ -836,6 +854,40 @@ const char* aparse_error_msg(const aparse_status status);
 
 #ifdef __cplusplus 
 }
+#endif
+
+/**
+ * @brief Infer an argument value type from its destination expression.
+ *
+ * The C11 convenience constructors below require a pointer to a supported
+ * scalar destination. Use the `aparse_arg_*` constructors when the destination
+ * is NULL or when a custom size or type is required.
+ */
+#ifndef __cplusplus
+#define APARSE__TYPE_OF(value) _Generic((value), \
+    bool: APARSE_ARG_TYPE_BOOL, \
+    signed char: APARSE_ARG_TYPE_SIGNED, \
+    short: APARSE_ARG_TYPE_SIGNED, \
+    int: APARSE_ARG_TYPE_SIGNED, \
+    long: APARSE_ARG_TYPE_SIGNED, \
+    long long: APARSE_ARG_TYPE_SIGNED, \
+    unsigned char: APARSE_ARG_TYPE_UNSIGNED, \
+    unsigned short: APARSE_ARG_TYPE_UNSIGNED, \
+    unsigned int: APARSE_ARG_TYPE_UNSIGNED, \
+    unsigned long: APARSE_ARG_TYPE_UNSIGNED, \
+    unsigned long long: APARSE_ARG_TYPE_UNSIGNED, \
+    float: APARSE_ARG_TYPE_FLOAT, \
+    double: APARSE_ARG_TYPE_FLOAT)
+
+/** Create a positional scalar argument, inferring its size and type. */
+#define aparse_number(name, dest, help) \
+    aparse_arg_number((name), (dest), sizeof(*(dest)), \
+        APARSE__TYPE_OF(*(dest)), (help))
+
+/** Create an option for a scalar destination, inferring its size and type. */
+#define aparse_option(shortopt, longopt, dest, help) \
+    aparse_arg_option((shortopt), (longopt), (dest), sizeof(*(dest)), \
+        APARSE__TYPE_OF(*(dest)), (help))
 #endif
 
 #endif
