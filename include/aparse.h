@@ -54,7 +54,7 @@ SOFTWARE.
         _0, _1, _2, _3, _4, _5, _6, _7, _8, \
         _9, _10,_11,_12,_13,_14,_15,_16,N,...) N
 #   define APARSE__COUNT_ARGS1(...) \
-    APARSE__COUNT_ARGS2(dummy, __VA_ARGS__, \
+    APARSE__COUNT_ARGS2(dummy, ##__VA_ARGS__, \
             16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0)
 #   define APARSE__COUNT_ARGS(...) \
         APARSE__COUNT_ARGS1(__VA_ARGS__)
@@ -810,18 +810,18 @@ aparse_status aparse_parse(
 );
 
 /**
- * @brief Dispatch all queued handle
- * Dispatch all handle with their respective constructed payload
+ * @brief Dispatch all queued handlers and release the dispatch list.
  *
- * @param dispatch The list of dispatched functions
+ * @param dispatch The list of dispatched functions.
  */
 extern void aparse_dispatch_all(aparse_list* dispatch);
 
 /**
  * @brief Free a dispatch list
  *
- * Frees all resources owned by the dispatch list, including payloads
- * allocated for subparsers when no user-provided payload was specified.
+ * Frees all queued payloads and the dispatch list storage without invoking
+ * handlers. Use this when parsing succeeded with delayed dispatch but the
+ * queued handlers will not be run.
  *
  * @param dispatch Dispatch list to free
  */

@@ -3,3 +3,4 @@ build
 .vscode
 docs
 script/aparse.h
+__pycache__

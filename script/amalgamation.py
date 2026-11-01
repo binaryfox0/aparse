@@ -2,6 +2,7 @@
 
 import argparse
 from pathlib import Path
+import re
 from typing import TextIO
 from datetime import UTC, datetime
 import subprocess
@@ -38,7 +39,12 @@ REPO_DIR = (Path(__file__).resolve().parent / "..").resolve()
 HEADER_DIR = REPO_DIR / "include"
 HEADER_ENTRY = "aparse.h"
 SOURCE_DIR = REPO_DIR / "src"
-SOURCES = [ "aparse_list.c", "aparse.c" ]
+SOURCES = [
+    "aparse.c",
+    "aparse_parse.c",
+    "aparse_help.c",
+    "aparse_list.c",
+]
 
 def get_git_commit():
     try:
@@ -60,97 +66,88 @@ def append_banner(dest, content):
     right = max(pad_total - left, 0)
     dest.write(f"/* {'-' * left}{content}{'-' * right} */\n\n")
 
+def resolve_project_include(including_path: Path, include_name: str):
+    for candidate in (
+            including_path.parent / include_name,
+            HEADER_DIR / include_name,
+            SOURCE_DIR / include_name):
+        if candidate.is_file():
+            return candidate.resolve()
+    return None
+
+def project_includes(path: Path):
+    in_comment = False
+    with path.open("r", encoding="utf-8") as source:
+        for line in source:
+            stripped = line.strip()
+            if in_comment:
+                if "*/" in stripped:
+                    in_comment = False
+                continue
+            if stripped.startswith("/*"):
+                if "*/" not in stripped:
+                    in_comment = True
+                continue
+            match = re.match(r"#\s*include\s*[<\"]([^>\"]+)[>\"]", stripped)
+            if not match:
+                continue
+            included = resolve_project_include(path, match.group(1))
+            if included:
+                yield included
+
 def collect_headers(include_dir: Path, entry):
-    header_queue = [include_dir / entry]
+    ordered = []
     visited = set()
-    system_headers = set()
 
-    while header_queue:
-        path = header_queue.pop()
+    def visit(path: Path):
+        path = path.resolve()
         if path in visited:
-            continue
+            return
         visited.add(path)
+        for dependency in project_includes(path):
+            visit(dependency)
+        ordered.append(path)
 
-        in_comment = False
-        with path.open("r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if in_comment:
-                    if "*/" in line:
-                        in_comment = False
-                    continue
+    visit(include_dir / entry)
+    return ordered
 
-                if line.startswith("/*"):
-                    if "*/" not in line:
-                        in_comment = True
-                    continue
+def strip_leading_comment(lines):
+    start = next((i for i, line in enumerate(lines) if line.strip()), None)
+    if start is None or not lines[start].lstrip().startswith("/*"):
+        return lines
+    end = next((i for i in range(start, len(lines)) if "*/" in lines[i]), None)
+    if end is None:
+        return lines
+    return lines[:start] + lines[end + 1:]
 
-                if not line:
-                    continue
-                
-                if line.startswith("#include"):
-                    include_part = line.removeprefix("#include").strip()
-                    if include_part.startswith('<') and include_part.endswith('>'):
-                        path2 = include_dir / include_part[1:-1]
-                        if path2.exists():
-                            header_queue.append(path2)
-                        else:
-                            system_headers.add(include_part[1:-1])
-                elif not line.startswith("#"):
-                    break
+def strip_outer_guard(lines):
+    meaningful = [i for i, line in enumerate(lines) if line.strip()]
+    if len(meaningful) < 3:
+        return lines
 
-    return sorted(visited, reverse=True), system_headers
+    first, second = meaningful[:2]
+    guard = re.fullmatch(r"#\s*ifndef\s+(\w+)", lines[first].strip())
+    define = re.fullmatch(r"#\s*define\s+(\w+)(?:\s+.*)?", lines[second].strip())
+    if not guard or not define or guard.group(1) != define.group(1):
+        return lines
+
+    lines[first] = ""
+    lines[second] = ""
+    last = meaningful[-1]
+    if re.match(r"#\s*endif\b", lines[last].strip()):
+        lines[last] = ""
+    return lines
 
 def emit_implementation(dest: TextIO, path: Path):
-    in_comment = False
-    comment_count = 0
-    found_include = False
-    after_includes = False
-    skipped_guard = False
-    pending_ifndef = False
+    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    lines = strip_outer_guard(strip_leading_comment(lines))
 
-    prev_line: str | None = None
-
-    with path.open("r", encoding="utf-8") as f:
-        for line in f:
-            stripped = line.strip()
-
-            if not after_includes:
-                if comment_count == 1 and in_comment:
-                    if "*/" in stripped:
-                        in_comment = False
-                    continue
-
-                if comment_count < 1 and stripped.startswith("/*"):
-                    comment_count += 1
-                    if "*/" not in stripped:
-                        in_comment = True
-                    continue
-
-            if not skipped_guard:
-                if pending_ifndef and stripped.startswith("#define"):
-                    skipped_guard = True
-                    continue
-                if stripped.startswith("#ifndef"):
-                    pending_ifndef = True
-                    continue
-
-            if not after_includes:
-                if not stripped:
-                    continue
-                if stripped.startswith("#include"):
-                    found_include = True
-                    continue
-                elif found_include:
-                    after_includes = True
-
-            if prev_line is not None:
-                dest.write(prev_line)
-            prev_line = line
-
-    if prev_line is not None and \
-            not (skipped_guard and prev_line.strip().startswith("#endif")):
-        dest.write(prev_line)
+    for line in lines:
+        stripped = line.strip()
+        match = re.match(r"#\s*include\s*[<\"]([^>\"]+)[>\"]", stripped)
+        if match and resolve_project_include(path, match.group(1)):
+            continue
+        dest.write(line)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -160,16 +157,10 @@ if __name__ == "__main__":
             help="Path to amalgamation header")
     args = parser.parse_args()
 
-    header_queue, include_sysheaders = \
-            collect_headers(HEADER_DIR, "aparse.h")
-    
-    source_queue, src_sysheaders = set(), set()
-    for fname in SOURCES:
-        queue, sysheaders = \
-                collect_headers(SOURCE_DIR, fname)
-        source_queue.update(queue)
-        src_sysheaders.update(sysheaders)
-        
+    header_queue = collect_headers(HEADER_DIR, HEADER_ENTRY)
+    source_queue = [SOURCE_DIR / "aparse_internal.h"] + [
+        SOURCE_DIR / fname for fname in SOURCES
+    ]
 
     with Path(args.output).open("w", encoding="utf-8") as dest:
         dest.write("/*\n")
@@ -181,20 +172,12 @@ if __name__ == "__main__":
         dest.write(f"#ifndef {HEADER_GUARD}\n")
         dest.write(f"#define {HEADER_GUARD}\n\n")
 
-        for header in include_sysheaders:
-            dest.write(f"#include <{header}>\n")
-        dest.write("\n")
-
         for path in header_queue:
             emit_implementation(dest, path)
 
         dest.write("\n\n")       
         dest.write(f"#ifdef {HEADER_IMPLEMENTATION}\n\n")
         
-        for header in src_sysheaders:
-            dest.write(f"#include <{header}>\n")
-        dest.write("\n")
-
         for path in source_queue:
             append_banner(dest, f"{path} BEGIN")
             emit_implementation(dest, path)

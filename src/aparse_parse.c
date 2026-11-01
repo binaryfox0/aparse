@@ -43,6 +43,9 @@ static void aparse__destroy_payload(
     const aparse_arg* args,
     uint8_t *payload);
 
+static void aparse__release_dispatch_entry(
+    aparse__dispatch_t *entry);
+
 const aparse_arg aparse__help_arg = 
 { 
     .shortopt = "-h", 
@@ -51,12 +54,23 @@ const aparse_arg aparse__help_arg =
     .type = APARSE_ARG_TYPE_BOOL 
 };
 
+static void aparse__release_dispatch_entry(
+        aparse__dispatch_t *entry)
+{
+    if(entry->args)
+        aparse__destroy_payload(entry->args, entry->payload);
+    if(entry->payload && entry->freeable)
+        free(entry->payload);
+    entry->payload = NULL;
+}
+
 void aparse_dispatch_all(
         aparse_list* dispatch_list)
 {
-    if(!dispatch_list || !dispatch_list->ptr || dispatch_list->size < 1)
+    if(!dispatch_list)
         return;
-    if(dispatch_list->itemsz != sizeof(aparse__dispatch_t))
+    if(dispatch_list->ptr &&
+            dispatch_list->itemsz != sizeof(aparse__dispatch_t))
         return;
 
     for(size_t i = 0; i < dispatch_list->size; i++)
@@ -64,22 +78,26 @@ void aparse_dispatch_all(
         aparse__dispatch_t *entry =
             &aparse_list_get(dispatch_list, aparse__dispatch_t, i);
 
-        entry->args->handler(entry->payload);
-        aparse__destroy_payload(entry->args, entry->payload);
+        if(entry->args && entry->args->handler)
+            entry->args->handler(entry->payload);
+        aparse__release_dispatch_entry(entry);
     }
+    aparse_list_free(dispatch_list);
 }
 
 void aparse_dispatch_free(
         aparse_list* dispatch_list)
 {
-    if(!dispatch_list || !dispatch_list->ptr || dispatch_list->size < 1)
+    if(!dispatch_list)
         return;
+    if(dispatch_list->ptr &&
+            dispatch_list->itemsz != sizeof(aparse__dispatch_t))
+        return;
+
     aparse__dispatch_t* list = dispatch_list->ptr;
     for(size_t i = 0; i < dispatch_list->size; i++)
-    {
-        if(list[i].payload && list[i].freeable)
-            free(list[i].payload);
-    }
+        aparse__release_dispatch_entry(&list[i]);
+    aparse_list_free(dispatch_list);
 }
 
 aparse_status aparse__parse_impl(

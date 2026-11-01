@@ -56,6 +56,8 @@ aparse_status aparse_parse(
             *out_dispatch = dispatch_list;
         else
             aparse_dispatch_all(&dispatch_list);
+    } else {
+        aparse_dispatch_free(&dispatch_list);
     }
 
     return ret;
