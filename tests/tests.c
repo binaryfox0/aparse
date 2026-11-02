@@ -1,5 +1,6 @@
 #include "test_support.h"
 
+#include <stdlib.h>
 #include <stdint.h>
 
 static aparse_status run_null_args(test_result* result)
@@ -208,6 +209,32 @@ static aparse_status run_string_pointer(test_result* result)
     return status;
 }
 
+static aparse_status run_positional_array_leaves_final(test_result* result)
+{
+    aparse_list values = {0};
+    char final[16] = {0};
+    aparse_arg args[] = {
+        aparse_arg_array("values", &values, sizeof(values), 0,
+                APARSE_ARG_TYPE_STRING, 0, NULL),
+        aparse_arg_string("final", final, sizeof(final), NULL),
+        aparse_arg_end_marker
+    };
+    char* argv[] = {
+        (char[]){"prog"}, (char[]){"first"}, (char[]){"second"},
+        (char[]){"last"}
+    };
+    aparse_status status = test_parse(result, 4, argv, args);
+    test_expect(result, values.size == 2, "array did not leave the final positional value");
+    test_expect(result, values.size == 2 &&
+            strcmp(aparse_list_get(&values, char*, 0), "first") == 0 &&
+            strcmp(aparse_list_get(&values, char*, 1), "second") == 0,
+            "array values were not parsed in order");
+    test_expect(result, strcmp(final, "last") == 0,
+            "final positional value was not parsed");
+    free(values.ptr);
+    return status;
+}
+
 static aparse_status run_option_equals(test_result* result)
 {
     int value = 0;
@@ -265,6 +292,7 @@ static const test_case tests[] = {
     {"string-copy", APARSE_STATUS_OK, APARSE_STATUS_OK, 0, run_string_copy},
     {"string-truncation", APARSE_STATUS_OK, APARSE_STATUS_OK, 0, run_string_truncation},
     {"string-pointer", APARSE_STATUS_OK, APARSE_STATUS_OK, 0, run_string_pointer},
+    {"positional-array-leaves-final", APARSE_STATUS_OK, APARSE_STATUS_OK, 0, run_positional_array_leaves_final},
     {"option-equals", APARSE_STATUS_OK, APARSE_STATUS_OK, 0, run_option_equals},
     {"option-separate-value", APARSE_STATUS_OK, APARSE_STATUS_OK, 0, run_option_separate_value},
     {"bool-option", APARSE_STATUS_OK, APARSE_STATUS_OK, 0, run_bool_option}

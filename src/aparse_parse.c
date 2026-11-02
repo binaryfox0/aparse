@@ -526,7 +526,7 @@ static aparse_status aparse__process_array(
 {
     int *idx = &ctx->idx;
     aparse_list* dest = arg->ptr;
-    size_t arrsz = 0, increment = 0;
+    size_t arrsz = 0, increment = 0, remaining = 0, reserved = 0;
 
     if(!dest)
         aparse__raise_fatal(ctx, APARSE_STATUS_NULL_POINTER, arg, 0);
@@ -536,7 +536,21 @@ static aparse_status aparse__process_array(
         aparse__raise_fatal(ctx, APARSE_STATUS_INVALID_TYPE, arg, 0);
 
     (*idx)--;
-    arrsz = (size_t)(argc - *idx);
+    remaining = (size_t)(argc - *idx);
+    for (aparse_arg* next = arg + 1; aparse_arg_nend(next); next++)
+    {
+        size_t required = 0;
+        if (!aparse__is_positional(next))
+            continue;
+        required = next->type & APARSE_ARG_TYPE_ARRAY ? next->array_size : 1;
+        if (reserved >= remaining || required >= remaining - reserved)
+        {
+            reserved = remaining;
+            break;
+        }
+        reserved += required;
+    }
+    arrsz = remaining - reserved;
     increment = arg->type & APARSE_ARG_TYPE_STRING ? 
         sizeof(char*) : 
         arg->element_size;

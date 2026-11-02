@@ -729,6 +729,9 @@ APARSE__INLINE aparse_arg aparse_arg_parser(
  * @return A fully constructed ::aparse_arg definition representing an array argument.
  *
  * @note If @p element_size is 0, the parser assumes an array of pointers (`char*`).
+ * @note A positional array consumes values while leaving the minimum required
+ *       values for later positional arguments. Its own `array_size` remains
+ *       the minimum number of values required by the array.
  */
 APARSE__INLINE aparse_arg aparse_arg_array(
         const char* name, 
