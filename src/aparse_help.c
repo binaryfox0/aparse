@@ -1,5 +1,10 @@
 #include "aparse_internal.h"
 
+static void aparse__print_subcmds_to(FILE* stream, const aparse_arg* args);
+static void aparse__print_usage_to(
+    const aparse_context* ctx,
+    FILE* stream);
+
 void aparse__default_errcb(
         const aparse_context* ctx,
         const aparse_status status, 
@@ -165,16 +170,29 @@ void aparse__print_help(
         aparse_arg* main_args,
         aparse__context_t *ctx) 
 {
-    aparse__print_usage(ctx);
+    aparse__print_usage_to(ctx, stdout);
     printf("\n");
     if(ctx->stack_top == 1) 
     {
         if(aparse__desc)
             printf("%s\n\n", aparse__desc);
     }
-    printf("positional arguments:\n");
-    aparse__print_pos_help(main_args);
-    printf("\noptions:\n");
+    bool has_positional = false;
+    for (aparse_arg *arg = main_args; aparse_arg_nend(arg); arg++)
+    {
+        if (aparse__is_positional(arg))
+        {
+            has_positional = true;
+            break;
+        }
+    }
+    if (has_positional)
+    {
+        printf("positional arguments:\n");
+        aparse__print_pos_help(main_args);
+        printf("\n");
+    }
+    printf("options:\n");
     aparse__print_help_tag(&aparse__help_arg, APARSE__SPACE_PER_INDENT);
 
     for(aparse_arg *sa = main_args;
@@ -255,37 +273,64 @@ void aparse__print_help_tag(
         return;
 
     len += printf("%*s", indent, "");
+    bool takes_value = !aparse__is_positional(arg) &&
+        !aparse__type_cmp(arg, APARSE_ARG_TYPE_BOOL);
+    bool is_array = (arg->type & APARSE_ARG_TYPE_ARRAY) != 0;
+    const char* option = arg->longopt ? arg->longopt : arg->shortopt;
+    size_t idx = option ? aparse__option_value_index(option) : 0;
+
     if (arg->shortopt)
+    {
         len += printf("%s", arg->shortopt);
+        if (takes_value)
+        {
+            putchar(' ');
+            len++;
+            for (const char* ch = option + idx; *ch != '\0'; ch++)
+            {
+                putchar(toupper((unsigned char)*ch));
+                len++;
+            }
+            if (is_array)
+            {
+                len += printf(" ...");
+            }
+        }
+    }
     if (arg->shortopt && arg->longopt)
         len += printf(", ");
     if (arg->longopt)
-        len += printf("%s", arg->longopt);
-
-    if (!aparse__is_positional(arg) &&
-        !aparse__type_cmp(arg, APARSE_ARG_TYPE_BOOL))
     {
-        const char* option = arg->longopt ? arg->longopt : arg->shortopt;
-        size_t idx = aparse__option_value_index(option);
-
-        putchar(' ');
-        len += 1;
-
-        for (const char* ch = option + idx; *ch != '\0'; ch++)
+        len += printf("%s", arg->longopt);
+        if (takes_value)
         {
-            putchar(toupper((unsigned char)*ch));
-            len += 1;
+            putchar(' ');
+            len++;
+            for (const char* ch = option + idx; *ch != '\0'; ch++)
+            {
+                putchar(toupper((unsigned char)*ch));
+                len++;
+            }
+            if (is_array)
+            {
+                len += printf(" ...");
+            }
+        }
+        else if (is_array && aparse__is_positional(arg))
+        {
+            len += printf(" ...");
         }
     }
 
     bool longer = len > MAX_ARG_STR;
     if (arg->help)
     {
-        int space = APARSE__SPACE_PER_INDENT + MAX_ARG_STR -
-            (longer ? 0 : len);
+        int space = APARSE__SPACE_PER_INDENT + MAX_ARG_STR;
 
         if (longer)
             printf("\n");
+        else
+            space -= len;
 
         aparse__print_wrapped(
                 arg->help, 
@@ -305,7 +350,7 @@ void aparse__print_pos_help(aparse_arg* args)
                 continue;
             }
             printf("%*s", APARSE__SPACE_PER_INDENT, "");
-            aparse__print_subcmds(args);
+            aparse__print_subcmds_to(stdout, args);
             printf("\n");
 
             aparse__foreach(ptr, args)
@@ -320,27 +365,35 @@ void aparse__print_pos_help(aparse_arg* args)
 void aparse__print_subcmds(
         const aparse_arg* args) 
 {
+    aparse__print_subcmds_to(stderr, args);
+}
+
+static void aparse__print_subcmds_to(
+        FILE* stream,
+        const aparse_arg* args)
+{
     int index = 0;
     if (!args || !args->subargs)
     {
-        fputs("{}", stderr);
+        fputs("{}", stream);
         return;
     }
 
-    fputc('{', stderr);
+    fputc('{', stream);
     aparse__foreach(ptr, args)
     {
         const char* name = ptr->longopt ? ptr->longopt : "";
         if (index++ > 0)
-            fputs(", ", stderr);
-        fputs(name, stderr);
+            fputs(", ", stream);
+        fputs(name, stream);
     }
 
-    fputc('}', stderr);
+    fputc('}', stream);
 }
 
 static void aparse__print_usage_before(
-        const aparse_context *ctx) 
+        const aparse_context *ctx,
+    FILE* stream)
 {
     int idx = 0;
     aparse_arg *arg = NULL;
@@ -358,7 +411,7 @@ static void aparse__print_usage_before(
                 continue;
 
             if(aparse__is_argument(arg))
-                fprintf(stderr, "%s ", arg->longopt);
+                fprintf(stream, " %s", arg->longopt);
             else
             {
                 aparse__foreach(subcmd, arg)
@@ -367,7 +420,7 @@ static void aparse__print_usage_before(
                     {
                         idx++;
                         found = true;
-                        fprintf(stderr, "%s ", subcmd->longopt);
+                        fprintf(stream, " %s", subcmd->longopt);
                         break;
                     }
                 }
@@ -382,7 +435,7 @@ static void aparse__print_usage_before(
     }
 }
 
-static void aparse_print_usage_after(aparse_arg* args)
+static void aparse_print_usage_after(aparse_arg* args, FILE* stream)
 {
     aparse_list list = {.itemsz = sizeof(aparse_arg*)};
     for(aparse_arg *sa = args;
@@ -392,7 +445,7 @@ static void aparse_print_usage_after(aparse_arg* args)
             aparse_list_add(&list, &sa);
         else 
         {
-            fprintf(stderr, "[%s", 
+                fprintf(stream, " [%s",
                     sa->shortopt ? sa->shortopt : sa->longopt);
             if(!aparse__type_cmp(sa, APARSE_ARG_TYPE_BOOL))
             {
@@ -401,33 +454,48 @@ static void aparse_print_usage_after(aparse_arg* args)
                 
                 option = sa->longopt ? sa->longopt : sa->shortopt;
                 idx = aparse__option_value_index(option);
-                fputc(' ', stderr);
+                fputc(' ', stream);
                 for(const char *ch = option + idx; *ch != '\0'; ch++)
-                    fputc(toupper(*ch), stderr);
+                    fputc(toupper((unsigned char)*ch), stream);
+                if (sa->type & APARSE_ARG_TYPE_ARRAY)
+                    fputs(" ...", stream);
             }
-            fputs("] ", stderr);
+            fputc(']', stream);
         }
     }
     for(size_t i = 0; i < list.size; i++)
     {
         aparse_arg* entry = aparse_list_get(&list, aparse_arg*, i);
         if(aparse__is_argument(entry))
-            fprintf(stderr, "%s ", entry->longopt);
+        {
+            bool is_array = (entry->type & APARSE_ARG_TYPE_ARRAY) != 0;
+            bool optional_array = is_array && entry->array_size == 0;
+            fprintf(stream, optional_array ? " [%s%s]" : " %s%s",
+                    entry->longopt, is_array ? " ..." : "");
+        }
         else {
-            aparse__print_subcmds(entry);
-            fputs(" ... ", stderr);
+            aparse__print_subcmds_to(stream, entry);
+            fputs(" ...", stream);
         }
     }
     aparse_list_free(&list);
-    fputc('\n', stderr);
+    fputc('\n', stream);
+}
+
+static void aparse__print_usage_to(
+        const aparse_context *ctx,
+        FILE* stream)
+{
+    fprintf(stream, "usage: %s", aparse_progname);
+    aparse__print_usage_before(ctx, stream);
+    aparse_print_usage_after(ctx->stack[ctx->stack_top - 1], stream);
+    fputc('\n', stream);
 }
 
 void aparse__print_usage(
         const aparse_context *ctx) 
 {
-    fprintf(stderr, "usage: %s ", aparse_progname);
-    aparse__print_usage_before(ctx);
-    aparse_print_usage_after(ctx->stack[ctx->stack_top - 1]);
+    aparse__print_usage_to(ctx, stderr);
 }
 
 void aparse__reset_state(

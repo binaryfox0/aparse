@@ -23,7 +23,7 @@
 #endif
 
 #define APARSE__SPACE_PER_INDENT 2
-#define MAX_ARG_STR 19
+#define MAX_ARG_STR 22
 #define APARSE__MAX_DEPTH 16
 
 #define APARSE_IS_LE (*(unsigned char *)&(uint16_t){1})
