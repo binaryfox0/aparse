@@ -143,6 +143,40 @@ static aparse_status run_dispatch_free_releases_storage(test_result* result)
     return status;
 }
 
+static aparse_status run_dispatch_preserves_caller_owned_array(test_result* result)
+{
+    typedef struct {
+        aparse_list placeholder;
+    } test_payload;
+
+    aparse_list values = {0};
+    size_t layout[] = {offsetof(test_payload, placeholder), sizeof(aparse_list)};
+    aparse_arg command_args[] = {
+        aparse_arg_array("values", &values, sizeof(values), 0,
+                APARSE_ARG_TYPE_STRING, 0, NULL),
+        aparse_arg_end_marker
+    };
+    aparse_arg commands[] = {
+        aparse_arg_subparser_impl("run", command_args, run_dispatch_handler,
+                NULL, 0, NULL, layout, 1),
+        aparse_arg_end_marker
+    };
+    aparse_arg args[] = {
+        aparse_arg_parser("command", commands),
+        aparse_arg_end_marker
+    };
+    char* argv[] = {(char[]){"prog"}, (char[]){"run"},
+        (char[]){"first"}, (char[]){"second"}};
+    aparse_list dispatch = {0};
+    aparse_status status = aparse_parse(4, argv, args, &dispatch, NULL);
+
+    aparse_dispatch_all(&dispatch);
+    test_expect(result, values.ptr != NULL && values.size == 2,
+            "dispatch should preserve arrays stored in caller-owned destinations");
+    aparse_list_free(&values);
+    return status;
+}
+
 static aparse_status run_failed_parse_releases_dispatch(test_result* result)
 {
     char required[8] = {0};
@@ -179,6 +213,7 @@ static const test_case tests[] = {
     {"subparser-without-layout", APARSE_STATUS_OK, APARSE_STATUS_OK, 0, run_subparser_without_layout},
     {"dispatch-all-releases-storage", APARSE_STATUS_OK, APARSE_STATUS_OK, 0, run_dispatch_all_releases_storage},
     {"dispatch-free-releases-storage", APARSE_STATUS_OK, APARSE_STATUS_OK, 0, run_dispatch_free_releases_storage},
+    {"dispatch-preserves-caller-owned-array", APARSE_STATUS_OK, APARSE_STATUS_OK, 0, run_dispatch_preserves_caller_owned_array},
     {"failed-parse-releases-dispatch", APARSE_STATUS_MISSING_POSITIONAL, APARSE_STATUS_MISSING_POSITIONAL, 1, run_failed_parse_releases_dispatch}
 };
 

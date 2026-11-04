@@ -816,6 +816,7 @@ aparse_status aparse_parse(
  * @brief Dispatch all queued handlers and release the dispatch list.
  *
  * @param dispatch The list of dispatched functions.
+ * @note Array storage owned by caller-supplied payloads or destinations remains caller-owned.
  */
 extern void aparse_dispatch_all(aparse_list* dispatch);
 
@@ -827,6 +828,7 @@ extern void aparse_dispatch_all(aparse_list* dispatch);
  * queued handlers will not be run.
  *
  * @param dispatch Dispatch list to free
+ * @note Array storage owned by caller-supplied payloads or destinations remains caller-owned.
  */
 extern void aparse_dispatch_free(aparse_list* dispatch);
 

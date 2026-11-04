@@ -57,7 +57,7 @@ const aparse_arg aparse__help_arg =
 static void aparse__release_dispatch_entry(
         aparse__dispatch_t *entry)
 {
-    if(entry->args)
+    if(entry->args && entry->freeable)
         aparse__destroy_payload(entry->args, entry->payload);
     if(entry->payload && entry->freeable)
         free(entry->payload);
@@ -685,11 +685,27 @@ static void aparse__destroy_payload(
         const aparse_arg *args, 
         uint8_t *payload)
 {
+    size_t payload_size = 0;
+    uintptr_t payload_start = (uintptr_t)payload;
+
     if(!args || !payload)
         return;
+
+    for(size_t i = 0; i < args->layout_size; i++)
+    {
+        size_t end = args->data_layout[i * 2] + args->data_layout[i * 2 + 1];
+        if(end > payload_size)
+            payload_size = end;
+    }
+
     aparse__foreach(sa, args)
     {
         if(!(sa->type & APARSE_ARG_TYPE_ARRAY))
+            continue;
+        uintptr_t list_start = (uintptr_t)sa->ptr;
+        if(list_start < payload_start ||
+                list_start - payload_start > payload_size ||
+                sizeof(aparse_list) > payload_size - (list_start - payload_start))
             continue;
         free(((aparse_list*)sa->ptr)->ptr);
     }
