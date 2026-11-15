@@ -21,12 +21,12 @@
 #define APARSE_NARGS_MODE(n)      (((n) & APARSE_NARGS_MODE_MASK) >> APARSE__NARGS_SHIFT)
 #define APARSE_NARGS_COUNT(n)     ((n) & ~APARSE_NARGS_MODE_MASK)
 
-#define APARSE__STATIC_ASSERT(c, m) \\
+#define APARSE__STATIC_ASSERT(c, m) \
     ((void)sizeof(char[(c) ? 1 : -1]), (m))
 
-#define APARSE_NARGS(m, v) \\
-    (APARSE__STATIC_ASSERT((m) <= APARSE_NARGS_MAXIMUM, "APARSE_NARGS: invalid mode"), \\
-     APARSE__STATIC_ASSERT((v) <= ~APARSE_NARGS_MODE_MASK, "APARSE_NARGS: value exceeds available bits"), \\
+#define APARSE_NARGS(m, v) \
+    (APARSE__STATIC_ASSERT((m) <= APARSE_NARGS_MAXIMUM, "APARSE_NARGS: invalid mode"), \
+     APARSE__STATIC_ASSERT((v) <= ~APARSE_NARGS_MODE_MASK, "APARSE_NARGS: value exceeds available bits"), \
      (((size_t)(m) << APARSE__NARGS_SHIFT) | (size_t)(v)))
 
 #define APARSE_PTR(type, value) ((type[1]){(value)})
