@@ -1,34 +1,39 @@
-
 #ifndef APARSE_H
 #define APARSE_H
 
 #include <stddef.h>
 
-#define APARSE_MAX_DEPTH 8
-#define APARSE_STRING_UNBOUNDED 0
+/* =========================================================================
+ * Configuration constants and macros
+ * ========================================================================= */
 
-#define APARSE__NARGS_SHIFT     (sizeof(size_t) * 8 - 2)
+#define APARSE_MAX_DEPTH          8
+#define APARSE_STRING_UNBOUNDED   0
 
-#define APARSE_NARGS_MODE_MASK  ((size_t)0x3 << APARSE__NARGS_SHIFT)
-#define APARSE_NARGS_NONE       0
-#define APARSE_NARGS_EXACT      1
-#define APARSE_NARGS_MINIMUM    2
-#define APARSE_NARGS_MAXIMUM    3
+#define APARSE__NARGS_SHIFT       (sizeof(size_t) * 8 - 2)
 
-#define APARSE_NARGS_MODE(n)    (((n) & APARSE_NARGS_MODE_MASK) >> APARSE__NARGS_SHIFT)
-#define APARSE_NARGS_COUNT(n)   ((n) & ~APARSE_NARGS_MODE_MASK)
+#define APARSE_NARGS_MODE_MASK    ((size_t)0x3 << APARSE__NARGS_SHIFT)
+#define APARSE_NARGS_NONE         0
+#define APARSE_NARGS_EXACT        1
+#define APARSE_NARGS_MINIMUM      2
+#define APARSE_NARGS_MAXIMUM      3
 
-#define APARSE__STATIC_ASSERT(c, m) \
+#define APARSE_NARGS_MODE(n)      (((n) & APARSE_NARGS_MODE_MASK) >> APARSE__NARGS_SHIFT)
+#define APARSE_NARGS_COUNT(n)     ((n) & ~APARSE_NARGS_MODE_MASK)
+
+#define APARSE__STATIC_ASSERT(c, m) \\
     ((void)sizeof(char[(c) ? 1 : -1]), (m))
 
-#define APARSE_NARGS(m, v) \
-    (APARSE__STATIC_ASSERT((m) <= APARSE_NARGS_MAXIMUM, "APARSE_NARGS: invalid mode"), \
-     APARSE__STATIC_ASSERT((v) <= ~APARSE_NARGS_MODE_MASK, "APARSE_NARGS: value exceeds available bits"), \
+#define APARSE_NARGS(m, v) \\
+    (APARSE__STATIC_ASSERT((m) <= APARSE_NARGS_MAXIMUM, "APARSE_NARGS: invalid mode"), \\
+     APARSE__STATIC_ASSERT((v) <= ~APARSE_NARGS_MODE_MASK, "APARSE_NARGS: value exceeds available bits"), \\
      (((size_t)(m) << APARSE__NARGS_SHIFT) | (size_t)(v)))
 
 #define APARSE_PTR(type, value) ((type[1]){(value)})
+
+
 /* =========================================================================
- * Allocator
+ * Allocator and dynamic array
  * ========================================================================= */
 
 /*
@@ -50,9 +55,16 @@ typedef struct
     void *userdata;
 } aparse_alloc_t;
 
+typedef struct
+{
+    void *data;
+    size_t size;
+    size_t capacity;
+} aparse_array_t;
+
 
 /* =========================================================================
- * Argument types and kinds
+ * Argument types, kinds, and actions
  * ========================================================================= */
 
 /* Type of value stored in an argument's destination. */
@@ -74,10 +86,21 @@ typedef enum
     APARSE_ARGUMENT_COMMAND
 } aparse_argument_kind_t;
 
+typedef enum
+{
+    APARSE_ACTION_STORE = 0,
+    APARSE_ACTION_APPEND
+} aparse_action_t;
+
+
+/* =========================================================================
+ * Argument verification
+ * ========================================================================= */
+
 typedef struct aparse_argument aparse_argument_t;
 typedef const char *aparse_verify_result_t;
 typedef aparse_verify_result_t (*aparse_verify_fn)(
-        void *userdata, 
+        void *userdata,
         const aparse_argument_t *arg,
         const void *value);
 
@@ -87,11 +110,6 @@ typedef struct
     void *userdata;
 } aparse_verify_t;
 
-typedef enum
-{
-    APARSE_ACTION_STORE = 0,
-    APARSE_ACTION_APPEND
-} aparse_action_t;
 
 /* =========================================================================
  * Argument definition
@@ -132,16 +150,9 @@ struct aparse_argument
     size_t children_count;
 };
 
-typedef struct
-{
-    void *data;
-    size_t size;
-    size_t capacity;
-} aparse_array_t;
-
 
 /* =========================================================================
- * Configuration
+ * Parser configuration
  * ========================================================================= */
 
 typedef struct
@@ -163,6 +174,8 @@ typedef struct
     aparse_action_trigger_t help;
     aparse_action_trigger_t version;
 } aparse_config_t;
+
+extern const aparse_config_t aparse_default_config;
 
 
 /* =========================================================================
@@ -206,7 +219,78 @@ typedef enum
 
 
 /* =========================================================================
- * Parse result
+ * Library status codes
+ * ========================================================================= */
+
+/*
+ * Return status of parser operations.
+ *
+ * APARSE_ERR_OK:
+ *     Parsing completed successfully.
+ *
+ * APARSE_ERR_HELP:
+ *     A help request was encountered. This is a control-flow status,
+ *     not an actual error. Parsing stops and the status propagates through
+ *     nested parsing layers.
+ *
+ * APARSE_ERR_USER:
+ *     Command-line input was invalid. Detailed information is available
+ *     through aparse_result_t.
+ *
+ * Other APARSE_ERR_* values:
+ *     A library, API, resource, or internal failure occurred.
+ *
+ * Result contract:
+ *
+ *     APARSE_ERR_OK:
+ *         result->user_error == APARSE_UERR_OK
+ *
+ *     APARSE_ERR_HELP:
+ *         result->user_error == APARSE_UERR_HELP
+ *
+ *     APARSE_ERR_USER:
+ *         result->user_error != APARSE_UERR_OK
+ *         and result->user_error != APARSE_UERR_HELP
+ *
+ *     Other errors:
+ *         Result diagnostic fields are not guaranteed to be populated.
+ */
+typedef enum
+{
+    APARSE_ERR_OK = 0,
+
+    /* API usage errors */
+    APARSE_ERR_UNIMPLEMENTED,
+    APARSE_ERR_INVALID_ARGUMENT,
+
+    /* Argument definition errors */
+    APARSE_ERR_INVALID_SPEC,
+    APARSE_ERR_DUPLICATE_NAME,
+    APARSE_ERR_INVALID_TYPE,
+    APARSE_ERR_INVALID_SIZE,
+    APARSE_ERR_INVALID_DESTINATION,
+    APARSE_ERR_TOO_DEEP,
+
+    /* Resource errors */
+    APARSE_ERR_OUT_OF_MEMORY,
+    APARSE_ERR_SIZE_OVERFLOW,
+
+    /* Input/source handling errors */
+    APARSE_ERR_INVALID_CMDLINE,
+    APARSE_ERR_INVALID_ENCODING,
+
+    /* User input errors */
+    APARSE_ERR_USER,
+
+    /* Internal errors */
+    APARSE_ERR_INTERNAL,
+
+    APARSE__ERR_COUNT
+} aparse_error_t;
+
+
+/* =========================================================================
+ * Parse result types
  * ========================================================================= */
 
 /*
@@ -287,77 +371,9 @@ typedef struct
     aparse_subcommand_node_t *subcommand_head;
 } aparse_result_t;
 
-/* =========================================================================
- * Library status codes
- * ========================================================================= */
-
-/*
- * Return status of parser operations.
- *
- * APARSE_ERR_OK:
- *     Parsing completed successfully.
- *
- * APARSE_ERR_HELP:
- *     A help request was encountered. This is a control-flow status,
- *     not an actual error. Parsing stops and the status propagates through
- *     nested parsing layers.
- *
- * APARSE_ERR_USER:
- *     Command-line input was invalid. Detailed information is available
- *     through aparse_result_t.
- *
- * Other APARSE_ERR_* values:
- *     A library, API, resource, or internal failure occurred.
- *
- * Result contract:
- *
- *     APARSE_ERR_OK:
- *         result->user_error == APARSE_UERR_OK
- *
- *     APARSE_ERR_HELP:
- *         result->user_error == APARSE_UERR_HELP
- *
- *     APARSE_ERR_USER:
- *         result->user_error != APARSE_UERR_OK
- *         and result->user_error != APARSE_UERR_HELP
- *
- *     Other errors:
- *         Result diagnostic fields are not guaranteed to be populated.
- */
-typedef enum
-{
-    APARSE_ERR_OK = 0,
-
-    /* API usage errors */
-    APARSE_ERR_UNIMPLEMENTED,
-    APARSE_ERR_INVALID_ARGUMENT,
-
-    /* Argument definition errors */
-    APARSE_ERR_INVALID_SPEC,
-    APARSE_ERR_DUPLICATE_NAME,
-    APARSE_ERR_INVALID_TYPE,
-    APARSE_ERR_INVALID_SIZE,
-    APARSE_ERR_INVALID_DESTINATION,
-    APARSE_ERR_TOO_DEEP,
-
-    /* Resource errors */
-    APARSE_ERR_OUT_OF_MEMORY,
-    APARSE_ERR_SIZE_OVERFLOW,
-
-    /* Input/source handling errors */
-    APARSE_ERR_INVALID_CMDLINE,
-    APARSE_ERR_INVALID_ENCODING,
-
-    /* User input errors */
-    APARSE_ERR_USER,
-
-    /* Internal errors */
-    APARSE_ERR_INTERNAL,
-
-    APARSE__ERR_COUNT
-} aparse_error_t;
-
-extern const aparse_config_t aparse_default_config;
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* =========================================================================
  * Error strings
@@ -440,13 +456,15 @@ aparse_error_t aparse_parse_from_cmdline(
         const aparse_config_t *config,
         aparse_result_t *result);
 
+
 /* =========================================================================
  * Output
  * ========================================================================= */
 
-
+/* Prints usage information for the selected command. */
 void aparse_print_usage(
         const aparse_result_t *result);
+
 /* Prints user-input diagnostics from a parse result. */
 void aparse_print_error(
         const aparse_result_t *result);
@@ -460,6 +478,7 @@ void aparse_print_help(
  * Cleanup
  * ========================================================================= */
 
+/* Releases storage owned by a dynamic array. */
 void aparse_destroy_array(
         aparse_array_t *array,
         const aparse_config_t *config);
@@ -473,5 +492,8 @@ void aparse_destroy_result(
         aparse_result_t *result,
         const aparse_config_t *config);
 
+#ifdef __cplusplus 
+}
+#endif
 
 #endif
