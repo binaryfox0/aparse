@@ -1,78 +1,45 @@
 # aparse
 
-A flexible argument parser library for C/C++, inspired by Python's `aparse`. For now, I can say that it supports all of the important features of an argument parser need to have. It supports:
+**aparse** is a lightweight argument parsing library written in C, designed to provide a flexible and structured way to parse command-line arguments.
 
-- Positional and optional arguments
-- Short (`-f`) and long (`--file`) options
-- `key=value` and split-value style (`--file=value` and `--file value`)
-- Subcommands (subparsers)
-- Automatic help generation
-- Type parsing for string/int/unsigned/float
-- Array of arguments parsing
+> [!WARNING]
+> **aparse is under active development, and its API may change at any time without notice.**
+>
+> If you intend to use it in a project, consider pinning a specific version to avoid unexpected breaking changes. Alternatively, you can vendor the source and header files directly into your project to maintain a stable copy.
 
-## Example
-```c
-#include "aparse.h"
+## Features
 
-#include <stdio.h>
-#include <stdlib.h>
+- **Argument parsing** — Support for command-line options and positional arguments.
+- **Short and long options** — Define arguments using short (`-v`) and long (`--verbose`) forms.
+- **Type conversion** — Parse argument values into their corresponding types.
+- **Subcommands** — Organize commands into nested scopes with support for subcommand dispatch.
+- **Argument validation** — Detect missing arguments, invalid values, unexpected arguments, and other parsing errors.
+- **Special actions** — Support built-in actions such as help and version.
+- **Structured results** — Retrieve parsed values, parsing information, and diagnostic information through structured result objects.
+- **Customizable diagnostics** — Let applications decide how parsing errors are presented.
 
-typedef struct copy_data { char* src, *dest; } copy_data;
-void copy_command(void* data) {
-    copy_data* processed = data;
-    printf("Source: %s, Destionation: %s\n", processed->src, processed->dest);
-    // Processed here...
-}
+## Getting Started
 
-int main(int argc, char** argv) {
-    // Variable
-    bool verbose = false;
-    int number = 0;
-    float constant = -1;
-    char** strings = 0;
+### Usage
 
-    aparse_arg copy_subargs[] = {
-        aparse_arg_string("file", 0, 0, "Source"),
-        aparse_arg_string("dest", 0, 0, "Destionation"),
-        aparse_arg_end_marker
-    };
-    aparse_arg command[] = {
-        aparse_subparser_data("copy", copy_subargs, copy_command, "Copy file from source to destination", copy_data, src, dest),
-        aparse_arg_end_marker
-    };
-    aparse_arg main_args[] = {
-        aparse_arg_parser("command", command),
-        aparse_number("number", &number, "Just a number"),
-        // array_size=0: take all argument after it. library automatically allocated memory for it
-        // element_size=0: means the string have no size limitation
-        aparse_arg_array("strings", &strings, 0, APARSE_ARG_TYPE_STRING, 0, "An array of strings"),
-        aparse_option("-v", "--verbose", &verbose, "Toggle verbosity"),
-        aparse_option("-c", "--constant", &constant, "Just a constant"),
-        aparse_arg_end_marker
-    };
-    printf("program: info: sizeof(copy_subargs): %lu, sizeof(command): %lu, sizeof(main_args): %lu, total: %lu\n",
-        sizeof(copy_subargs), sizeof(command), sizeof(main_args),
-        sizeof(copy_subargs) + sizeof(command) + sizeof(main_args)
-    );
-    if(aparse_parse(argc, argv, main_args, "Just an example for repo") != 0)
-        return 1;
-    // Main logic here...
-    printf("Number: %d\n", number);
-    printf("Constant: %f\n", constant);
-    printf("Verbosity: %d\n", verbose);
-    for(int i = 0; i < main_args[2].size && strings; i++)
-        printf("strings[%d]: '%s'\n", i, strings[i]);
-    if(strings)
-        free(strings); // Deallocate pointer that aparse allocated for us
-    return 0;
-}
-```
+A basic example demonstrating how to define arguments, configure a parser, and process command-line input:
 
-In C11, `aparse_number` and `aparse_option` infer scalar size and type from a
-typed destination pointer. `aparse_subparser` creates a command without a
-payload; `aparse_subparser_data` creates one with an automatically allocated
-payload layout. Use the `aparse_arg_*` constructors when destinations are null,
-types or sizes are custom, or when defining arrays.
+**[Basic usage example](./example/example.c)**
 
-## Documentation
-[View](./DOCS.md) the document here.
+### Error Handling
+
+`aparse` distinguishes between library-level errors and user-facing parsing errors.
+
+- `aparse_error_t` represents errors encountered while executing library operations, such as invalid arguments or memory allocation failures.
+- `aparse_user_error_t` represents errors caused by user input, such as missing required arguments or invalid option values.
+
+A parsing operation can return `APARSE_ERR_OK` while still reporting a user-facing parsing error through `result->user_error`.
+
+The library also provides diagnostic helpers:
+
+- `aparse_print_error()` — Print a parsing diagnostic to a specified stream.
+- `aparse_user_error_string()` — Retrieve a textual description of a user-facing error.
+
+## License
+
+See [LICENSE](./LICENSE) for details.

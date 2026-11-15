@@ -1,64 +1,217 @@
-#include "aparse.h"
-
 #include <stdio.h>
-#include <stdlib.h>
+#include <stdint.h>
+#include <stdbool.h>
 
-int main(int argc, char** argv) {
-    // Variable
-    bool verbose = false;
-    int64_t number = 0;
-    float constant = -1;
-    aparse_list strings = {0};
-    const char *lorem = 
-        "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor "
-        "incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis "
-        "nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. "
-        "Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore "
-        "eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt "
-        "in culpa qui officia deserunt mollit anim id est laborum.";
+#include <aparse/aparse.h>
 
-    aparse_arg copy_subargs[] = {
-        aparse_arg_string("file", 0, 0, "Source"),
-        aparse_arg_string("dest", 0, 0, "Destionation"),
-        aparse_arg_end_marker
+#define ARRSZ(x) (sizeof((x)) / sizeof((x)[0]))
+
+static aparse_verify_result_t verify_optimization(
+        void *userdata,
+        const aparse_argument_t *argument,
+        const void *value)
+{
+    uint32_t optimization = *(const uint32_t*)value;
+    if(optimization > 3)
+        return "expected optimization level from 0 to 3";
+    return NULL;
+}
+
+int main(int argc, char **argv)
+{
+    const char *source = NULL;
+    const char *output = NULL;
+    uint32_t jobs = 0;
+    uint32_t optimization = 0;
+    bool fast_math = false;
+    bool warning_as_errors = false;
+    aparse_array_t definitions = {0};
+    aparse_array_t features = {0};
+    
+    const aparse_argument_t build_args[] = 
+    {
+        {
+            .kind = APARSE_ARGUMENT_POSITIONAL,
+            .type = APARSE_TYPE_STRING,
+            .longopt = "source",
+            .metavar = "SOURCE",
+            .out_val = &source,
+            .size = APARSE_STRING_UNBOUNDED,
+            .help = "Source directory"
+        },
+        {
+            .kind = APARSE_ARGUMENT_OPTION,
+            .type = APARSE_TYPE_STRING,
+            .shortopt = "-o",
+            .longopt = "--output",
+            .metavar = "DIR",
+            .out_val = &output,
+            .size = APARSE_STRING_UNBOUNDED,
+            .help = "Output directory"
+        },
+        {
+            .kind = APARSE_ARGUMENT_OPTION,
+            .type = APARSE_TYPE_UINT,
+            .shortopt = "-j",
+            .longopt = "--jobs",
+            .metavar = "N",
+            .size = sizeof(jobs),
+            .out_val = &jobs,
+            .help = "Number of parallel jobs"
+        },
+        {
+            .kind = APARSE_ARGUMENT_OPTION,
+            .type = APARSE_TYPE_UINT,
+            .verify = (aparse_verify_t){
+                .verify_fn = verify_optimization
+            },
+            .longopt = "--optimization",
+            .metavar = "LEVEL",
+            .out_val = &optimization,
+            .size = sizeof(optimization),
+            .help = "Optimization level (0-3)"
+        },
+        {
+            .kind = APARSE_ARGUMENT_FLAG,
+            .longopt = "--fast-math",
+            .out_val = &fast_math,
+            .help = "Enable fast floating-point math"
+        },
+        {
+            .kind = APARSE_ARGUMENT_FLAG,
+            .longopt = "--warnings-as-errors",
+            .out_val = &warning_as_errors,
+            .help = "Treat warnings as errors"
+        },
+        {
+            .kind = APARSE_ARGUMENT_OPTION,
+            .type = APARSE_TYPE_STRING,
+            .longopt = "--define",
+            .out_val = &definitions,
+            .action = APARSE_ACTION_APPEND,
+            .help = "Add a build definition (repetable)"
+        },
+        {
+            .kind = APARSE_ARGUMENT_OPTION,
+            .type = APARSE_TYPE_STRING,
+            .longopt = "--feature",
+            .out_val = &features,
+            .nargs = APARSE_NARGS(APARSE_NARGS_MINIMUM, 1),
+            .help = "Enable one or more features",
+            .metavar = "NAME"
+        }
     };
-    aparse_arg main_args[] = {
-        aparse_number("number", &number, "Just a number"),
-        // array_size=0: take all argument after it. library automatically allocated memory for it
-        // element_size=0: means the string have no size limitation
-        aparse_arg_array(
-                "strings", 
-                &strings, sizeof(strings), 
-                0, 
-                APARSE_ARG_TYPE_STRING, 0, 
-                "An array of strings"),
-        aparse_option("-v", "--verbose", &verbose, "Toggle verbosity"),
-        aparse_option("-c", "--constant", &constant, lorem),
-        aparse_arg_end_marker
+
+    const aparse_argument_t commands[] = 
+    {
+        {
+            .longopt = "build",
+            .children = build_args,
+            .children_count = ARRSZ(build_args),
+            .help = "Build the project"
+        },
+        {
+            .longopt = "clean",
+            .children = build_args,
+            .children_count = ARRSZ(build_args),
+            .help = "Clean build artifacts"
+        },
+        {
+            .longopt = "network",
+            .children = build_args,
+            .children_count = ARRSZ(build_args),
+            .help = "Manage network configuration"
+        },
+        {
+            .longopt = "service",
+            .children = build_args,
+            .children_count = ARRSZ(build_args),
+            .help = "Manage system services"
+        },
     };
 
-    aparse_list dispatch_list = {0};
-    if(aparse_parse(argc, argv, main_args, &dispatch_list, 0) != APARSE_STATUS_OK)
-        return 1;
+    const aparse_argument_t args[] =
+    {
+        {
+            .kind = APARSE_ARGUMENT_FLAG,
+            .longopt = "--verbose",
+            .shortopt = "-v",
+            .help = "Increase verbosity"
+        },
+        {
+            .kind = APARSE_ARGUMENT_FLAG,
+            .longopt = "--quiet",
+            .shortopt = "-q",
+            .help = "Supress output"
+        },
+        {
+            .kind = APARSE_ARGUMENT_OPTION,
+            .longopt = "--config",
+            .metavar = "FILE",
+            .help = "Configuration file"
+        },
+        {
+            .kind = APARSE_ARGUMENT_COMMAND,
+            .children = commands,
+            .children_count = ARRSZ(commands),
+            .longopt = "command",
+            .metavar = "COMMAND"
+        }
+    };
+    aparse_error_t rc = APARSE_ERR_OK;
+    aparse_result_t res = {0};
+    aparse_config_t config = aparse_default_config;
 
-    aparse_dispatch_all(&dispatch_list);
+    config.version.shortopt = NULL;
 
-    aparse_prog_info("sizeof(copy_subargs): %lu, sizeof(main_args): %lu, total: %lu",
-        sizeof(copy_subargs), sizeof(main_args),
-        sizeof(copy_subargs) + sizeof(main_args)
-    );
-    aparse_prog_debug("This is a debug text");
-    aparse_prog_info("This is an info text");
-    aparse_prog_warn("This is a warning text");
-    aparse_prog_error("This is an error text");
+    rc = aparse_parse_from_argv(argc, argv, args, ARRSZ(args), &config, &res);    
+    if(rc == APARSE_ERR_USER)
+    {
+        if(res.user_error == APARSE_UERR_HELP)
+        {
+            aparse_print_usage(&res);
+            fputc('\n', stderr);
+            if(res.arg == args)
+                fprintf(stderr, "Reference CLI for testing aparse features.\n");
+            else if(res.arg == build_args)
+                fprintf(stderr, "Build the project using the selected configuration.\n");
+            fputc('\n', stderr);
+            aparse_print_help(&res);
+        }
+        else
+            aparse_print_error(&res);
+    } 
+    else if(rc != APARSE_ERR_OK)
+    {
+        fprintf(stderr, "error: %s\n", aparse_strerror(rc));
+    }
+    else
+    {
+        aparse_subcommand_node_t *head = res.subcommand_head;
+        while(head)
+        {
+            if(head->command == build_args)
+            {
+                printf("Source directory: \"%s\"\n", source);
+                printf("Output directory: \"%s\"\n", output);
+                printf("Optimization level: %d\n", optimization);
+                printf("Fast math: %s\n", fast_math ? "true" : "false");
+                printf("Warnings as errors: %s\n", warning_as_errors ? "true" : "false");
+                printf("Definitions:\n");
+                for(size_t i = 0; i < definitions.size; i++)
+                    printf(" - %s\n", ((const char**)definitions.data)[i]);
+                printf("Features:\n");
+                for(size_t i = 0; i < features.size; i++)
+                    printf(" - %s\n", ((const char**)features.data)[i]);
 
-    // Main logic here...
-    aparse_prog_info("Number: %ld", number);
-    aparse_prog_info("Constant: %f", constant);
-    aparse_prog_info("Verbosity: %d", verbose);
-    for(size_t i = 0; i < strings.size; i++)
-        aparse_prog_info("strings[%zu]: '%s'", 
-                i, aparse_list_get(&strings, char*, i));
-    free(strings.ptr); // Deallocate pointer that aparse allocated for us
-    return 0;
+            }
+
+            head = head->next;
+        }
+    }
+
+    aparse_destroy_array(&features, &config);
+    aparse_destroy_array(&definitions, &config);
+    aparse_destroy_result(&res, &config);
+    return rc != APARSE_ERR_OK ? 1 : 0;
 }

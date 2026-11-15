@@ -1,6 +1,5 @@
-build
 .cache
 .vscode
-docs
-script/aparse.h
+build
+old-*
 __pycache__

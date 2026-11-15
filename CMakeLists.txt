@@ -2,12 +2,13 @@ cmake_minimum_required(VERSION 3.10)
 
 project(aparse LANGUAGES C)
 
-option(APARSE_BUILD_ASAN    "Build aparse with AddressSanitizer" OFF)
+option(APARSE_NO_ANSI_ESCAPE "Disable ANSI escape sequences in aparse's output" OFF)
+option(APARSE_BUILD_WITH_ASAN "Build aparse with AddressSanitizer" OFF)
 option(APARSE_BUILD_EXAMPLE "Build aparse's examples & tests" OFF)
-option(APARSE_LOG_STDOUT    "Write aparse log messages to stdout" OFF)
+# option(APARSE_LOG_STDOUT "Write aparse log messages to stdout" OFF)
 
 function(target_add_asan target_name)
-    if(NOT APARSE_BUILD_ASAN)
+    if(NOT APARSE_BUILD_WITH_ASAN)
         return()
     endif()
 
@@ -18,14 +19,14 @@ function(target_add_asan target_name)
 
     target_compile_options(${target_name} PRIVATE
         $<$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>:
-            -fsanitize=address
+            -fsanitize=address,leak
             -fno-omit-frame-pointer
         >
     )
 
     target_link_options(${target_name} PRIVATE
         $<$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>:
-            -fsanitize=address
+            -fsanitize=address,leak
         >
     )
 endfunction()
@@ -65,64 +66,54 @@ function(target_add_strict_flags target_name)
     )
 endfunction()
 
-set(APARSE_SOURCES
-    src/aparse.c
-    src/aparse_parse.c
-    src/aparse_help.c
-    src/aparse_list.c
-)
+add_library(aparse STATIC 
+    src/aparse.c)
 
-add_library(aparse STATIC ${APARSE_SOURCES})
-
-target_include_directories(aparse PUBLIC include
-)
-
-if(APARSE_LOG_STDOUT)
-    target_compile_definitions(aparse PRIVATE APARSE_LOG_STDOUT)
-endif()
-
-if(MSVC)
-    target_compile_options(aparse PUBLIC
-        "$<$<COMPILE_LANGUAGE:C>:/std:c11>"
+target_include_directories(aparse PUBLIC include)
+if(UNIX AND NOT APPLE)
+    target_compile_definitions(aparse PRIVATE
+        _POSIX_C_SOURCE=200809L
     )
 endif()
-
 set_target_properties(aparse PROPERTIES
     C_STANDARD 11
     C_STANDARD_REQUIRED YES
-    C_EXTENSIONS NO
-)
+    C_EXTENSIONS NO)
 
 target_add_asan(aparse)
 target_add_strict_flags(aparse)
 
 if(APARSE_BUILD_EXAMPLE)
-    add_executable(example example/example.c)
-    target_link_libraries(example PRIVATE aparse)
-    target_add_asan(example)
-    target_add_strict_flags(example)
-
-    add_executable(subcmd example/subcmd_example.c)
-    target_link_libraries(subcmd PRIVATE aparse)
-    if(UNIX)
-        target_link_libraries(subcmd PRIVATE m)
-    endif()
-
-    target_add_asan(subcmd)
-    target_add_strict_flags(subcmd)
-
-    add_executable(help-output tests/help_output.c)
-    target_link_libraries(help-output PRIVATE aparse)
-    target_add_asan(help-output)
-    target_add_strict_flags(help-output)
-
-    add_executable(edge-cases tests/edge_cases.c)
-    target_link_libraries(edge-cases PRIVATE aparse)
-    target_add_asan(edge-cases)
-    target_add_strict_flags(edge-cases)
-
-    add_executable(tests tests/tests.c)
-    target_link_libraries(tests PRIVATE aparse)
-    target_add_asan(tests)
-    target_add_strict_flags(tests)
+    add_subdirectory(example)
 endif()
+
+# if(APARSE_BUILD_EXAMPLE)
+#     add_executable(example example/example.c)
+#     target_link_libraries(example PRIVATE aparse)
+#     target_add_asan(example)
+#     target_add_strict_flags(example)
+
+#     add_executable(subcmd example/subcmd_example.c)
+#     target_link_libraries(subcmd PRIVATE aparse)
+#     if(UNIX)
+#         target_link_libraries(subcmd PRIVATE m)
+#     endif()
+
+#     target_add_asan(subcmd)
+#     target_add_strict_flags(subcmd)
+
+#     add_executable(help-output tests/help_output.c)
+#     target_link_libraries(help-output PRIVATE aparse)
+#     target_add_asan(help-output)
+#     target_add_strict_flags(help-output)
+
+#     add_executable(edge-cases tests/edge_cases.c)
+#     target_link_libraries(edge-cases PRIVATE aparse)
+#     target_add_asan(edge-cases)
+#     target_add_strict_flags(edge-cases)
+
+#     add_executable(tests tests/tests.c)
+#     target_link_libraries(tests PRIVATE aparse)
+#     target_add_asan(tests)
+#     target_add_strict_flags(tests)
+# endif()
