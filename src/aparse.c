@@ -26,18 +26,23 @@
 /* MARK: Portability macros                                                  */
 /* ========================================================================= */
 
+/*
+ * When ANSI escapes are disabled the macro must expand to an empty string
+ * literal (not to nothing), otherwise call sites such as
+ * `fprintf(f, "%s", APARSE__ANSI_ESCAPE(...))` become syntax errors.
+ */
 #ifndef APARSE_NO_ANSI_ESCAPE
 #    if defined(_WIN32) && !defined(__CYGWIN__)
 #        if defined(NTDDI_VERSION) && (NTDDI_VERSION >= NTDDI_WIN10_TH2)
 #            define APARSE__ANSI_ESCAPE(x) x
 #        else
-#            define APARSE__ANSI_ESCAPE(x)
+#            define APARSE__ANSI_ESCAPE(x) ""
 #        endif
 #    else
 #        define APARSE__ANSI_ESCAPE(x) x
 #    endif
 #else
-#    define APARSE__ANSI_ESCAPE(x)
+#    define APARSE__ANSI_ESCAPE(x) ""
 #endif
 
 #if defined(__GNUC__) || defined(__clang__)
@@ -107,7 +112,11 @@ static APARSE__PRINTF(3, 4) void aparse_log(
 {
     va_list va;
 
-    fprintf(APARSE__STREAM, "%s: %s: ", source, type);
+    if(!fmt)
+        return;
+
+    fprintf(APARSE__STREAM, "%s: %s: ",
+            source ? source : "aparse", type ? type : "");
     va_start(va, fmt);
     vfprintf(APARSE__STREAM, fmt, va);
     va_end(va);
@@ -201,6 +210,14 @@ const aparse_config_t aparse_default_config =
     .version.longopt = "--version"
 };
 
+static APARSE__INLINE bool aparse__config_is_valid(const aparse_config_t *config)
+{
+    return config &&
+           config->alloc.malloc &&
+           config->alloc.realloc &&
+           config->alloc.free;
+}
+
 /* ========================================================================= */
 /* MARK: Error strings                                                       */
 /* ========================================================================= */
@@ -221,7 +238,9 @@ const char *aparse_strerror(const aparse_error_t err)
         [APARSE_ERR_SIZE_OVERFLOW]       = "size calculation overflow",
         [APARSE_ERR_INVALID_CMDLINE]     = "invalid command-line string",
         [APARSE_ERR_INVALID_ENCODING]    = "invalid character encoding",
-        [APARSE_ERR_INTERNAL]            = "internal error"
+        [APARSE_ERR_INTERNAL]            = "internal error",
+        [APARSE_ERR_USER]                = "user error",
+        [APARSE_ERR_TOO_DEEP]            = "subcommand nesting is too deep"
     };
 
     if((int)err < 0 || err >= APARSE__ERR_COUNT)
@@ -255,6 +274,45 @@ const char *aparse_user_strerror(const aparse_user_error_t err)
 }
 
 /* ========================================================================= */
+/* MARK: Naming helpers                                                      */
+/* ========================================================================= */
+
+/* Name of a positional/command as shown to the user: metavar wins. */
+static APARSE__INLINE const char *aparse__positional_name(const aparse_argument_t *arg)
+{
+    if(!arg)
+        return "";
+    if(arg->metavar)
+        return arg->metavar;
+    if(arg->longopt)
+        return arg->longopt;
+    if(arg->shortopt)
+        return arg->shortopt;
+    return "";
+}
+
+/* Name of an option/flag as shown to the user in diagnostics. */
+static APARSE__INLINE const char *aparse__arg_display_name(const aparse_argument_t *arg)
+{
+    if(!arg)
+        return "";
+    if(arg->longopt)
+        return arg->longopt;
+    if(arg->shortopt)
+        return arg->shortopt;
+    if(arg->metavar)
+        return arg->metavar;
+    return "";
+}
+
+static APARSE__INLINE bool aparse__arg_is_array(const aparse_argument_t *arg)
+{
+    return arg && arg->kind == APARSE_ARGUMENT_OPTION &&
+           (arg->action == APARSE_ACTION_APPEND ||
+            APARSE__NARGS_IS_FLEXIBLE(APARSE_NARGS_MODE(arg->nargs)));
+}
+
+/* ========================================================================= */
 /* MARK: Scope management                                                    */
 /* ========================================================================= */
 
@@ -264,16 +322,23 @@ static aparse_error_t aparse__scope_create(
         const aparse_config_t *config,
         aparse__scope_t *out_scope)
 {
-    if(!out_scope || !args || args_count == 0 || !config)
+    if(!out_scope || (!args && args_count > 0) || !aparse__config_is_valid(config))
         return APARSE_ERR_INVALID_ARGUMENT;
 
     memset(out_scope, 0, sizeof(*out_scope));
-
-    if(args_count > (size_t)-1 / sizeof(*out_scope->states))
-        return APARSE_ERR_SIZE_OVERFLOW;
-
     out_scope->args = args;
     out_scope->args_count = args_count;
+
+    /* An empty scope is valid (e.g. a subcommand without arguments). */
+    if(args_count == 0)
+        return APARSE_ERR_OK;
+
+    if(args_count > (size_t)-1 / sizeof(*out_scope->states))
+    {
+        memset(out_scope, 0, sizeof(*out_scope));
+        return APARSE_ERR_SIZE_OVERFLOW;
+    }
+
     out_scope->states = config->alloc.malloc(
             config->alloc.userdata,
             sizeof(*out_scope->states) * args_count);
@@ -292,6 +357,10 @@ static APARSE__INLINE aparse__argument_state_t *aparse__scope_get_state(
         aparse__scope_t *scope,
         const aparse_argument_t *arg)
 {
+    if(!scope || !scope->states || !arg ||
+       arg < scope->args || arg >= scope->args + scope->args_count)
+        return NULL;
+
     return &scope->states[arg - scope->args];
 }
 
@@ -300,7 +369,7 @@ static void aparse__scope_destroy(aparse__scope_t *scope, const aparse_config_t 
     if(!scope)
         return;
 
-    if(scope->states)
+    if(scope->states && config && config->alloc.free)
         config->alloc.free(config->alloc.userdata, scope->states);
 
     memset(scope, 0, sizeof(*scope));
@@ -310,13 +379,35 @@ static void aparse__scope_destroy(aparse__scope_t *scope, const aparse_config_t 
 /* MARK: Argument matching                                                   */
 /* ========================================================================= */
 
+/*
+ * Match `name` against `carg`. With `allow_equal`, `carg` may also be of the
+ * form `name=value` (used by options only).
+ */
+static APARSE__INLINE bool aparse__name_matches(
+        const char *name,
+        const char *carg,
+        const bool allow_equal)
+{
+    size_t len = 0;
+
+    if(!name || !carg)
+        return false;
+
+    len = strlen(name);
+    if(len == 0 || strncmp(name, carg, len) != 0)
+        return false;
+
+    return carg[len] == '\0' || (allow_equal && carg[len] == '=');
+}
+
 static APARSE__INLINE bool aparse__match_arg_single(
         const char *shortopt,
         const char *longopt,
-        const char *carg)
+        const char *carg,
+        const bool allow_equal)
 {
-    return (shortopt && strcmp(shortopt, carg) == 0) ||
-           (longopt && strcmp(longopt, carg) == 0);
+    return aparse__name_matches(shortopt, carg, allow_equal) ||
+           aparse__name_matches(longopt, carg, allow_equal);
 }
 
 static APARSE__INLINE bool aparse__arg_is_special(const aparse_argument_t *arg)
@@ -327,7 +418,8 @@ static APARSE__INLINE bool aparse__arg_is_special(const aparse_argument_t *arg)
 
 static APARSE__INLINE bool aparse__arg_is_positional(const aparse_argument_t *arg)
 {
-    return !aparse__arg_is_special(arg) &&
+    return arg &&
+           !aparse__arg_is_special(arg) &&
            (arg->kind == APARSE_ARGUMENT_COMMAND ||
             arg->kind == APARSE_ARGUMENT_POSITIONAL);
 }
@@ -339,11 +431,14 @@ static APARSE__INLINE const aparse_argument_t *aparse__match_arg(
 {
     const aparse_argument_t *matched = NULL;
 
-    if(aparse__match_arg_single(config->help.shortopt, config->help.longopt, carg))
-        return (const void *)(uintptr_t)APARSE__SPECIAL_ACTION_HELP;
+    if(!scope || !carg || !config)
+        return NULL;
 
-    if(aparse__match_arg_single(config->version.shortopt, config->version.longopt, carg))
-        return (const void *)(uintptr_t)APARSE__SPECIAL_ACTION_VERSION;
+    if(aparse__match_arg_single(config->help.shortopt, config->help.longopt, carg, false))
+        return APARSE__ARG(APARSE__SPECIAL_ACTION_HELP);
+
+    if(aparse__match_arg_single(config->version.shortopt, config->version.longopt, carg, false))
+        return APARSE__ARG(APARSE__SPECIAL_ACTION_VERSION);
 
     for(size_t i = 0; i < scope->args_count; i++)
     {
@@ -351,13 +446,14 @@ static APARSE__INLINE const aparse_argument_t *aparse__match_arg(
 
         if(aparse__arg_is_positional(arg))
         {
-            if(scope->states[i].processed_count == 0)
+            /* Only the first not-yet-processed positional can take a value. */
+            if(!matched && scope->states[i].processed_count == 0)
                 matched = arg;
-            else
-                continue;
+            continue;
         }
 
-        if(aparse__match_arg_single(arg->shortopt, arg->longopt, carg))
+        if(aparse__match_arg_single(arg->shortopt, arg->longopt, carg,
+                    arg->kind == APARSE_ARGUMENT_OPTION))
             return arg;
     }
 
@@ -405,18 +501,19 @@ static aparse_error_t aparse__value_error(
                 if(num > (uint64_t)(smax))                                \
                     return aparse__value_error(                           \
                             result, arg, carg, APARSE_UERR_VALUE_OVERFLOW); \
-                *(stype *)arg->out_val = (stype)num;                     \
+                *(stype *)arg->out_val = (stype)num;                      \
             }                                                             \
         }                                                                 \
         return APARSE_ERR_OK;                                             \
     } while(0)
 
-#define APARSE__INCREMENT_INTEGER(stype, utype)                           \
+/*
+ * Increment through the unsigned type so that wrap-around is well defined
+ * (signed overflow would be undefined behaviour).
+ */
+#define APARSE__INCREMENT_INTEGER(utype)                                  \
     do {                                                                  \
-        if(arg->type == APARSE_TYPE_INT)                                  \
-            ++*(stype *)arg->out_val;                                    \
-        else                                                              \
-            ++*(utype *)arg->out_val;                                    \
+        ++*(utype *)arg->out_val;                                         \
         return APARSE_ERR_OK;                                             \
     } while(0)
 
@@ -431,13 +528,12 @@ static aparse_error_t aparse__increment_integer(const aparse_argument_t *arg)
     if(arg->type != APARSE_TYPE_INT && arg->type != APARSE_TYPE_UINT)
         return APARSE_ERR_INVALID_TYPE;
 
-    /* No overflow checks: increments use the destination's native type. */
     switch(arg->size)
     {
-        case sizeof(uint8_t):  APARSE__INCREMENT_INTEGER(int8_t, uint8_t);
-        case sizeof(uint16_t): APARSE__INCREMENT_INTEGER(int16_t, uint16_t);
-        case sizeof(uint32_t): APARSE__INCREMENT_INTEGER(int32_t, uint32_t);
-        case sizeof(uint64_t): APARSE__INCREMENT_INTEGER(int64_t, uint64_t);
+        case sizeof(uint8_t):  APARSE__INCREMENT_INTEGER(uint8_t);
+        case sizeof(uint16_t): APARSE__INCREMENT_INTEGER(uint16_t);
+        case sizeof(uint32_t): APARSE__INCREMENT_INTEGER(uint32_t);
+        case sizeof(uint64_t): APARSE__INCREMENT_INTEGER(uint64_t);
         default: return APARSE_ERR_INVALID_SIZE;
     }
 }
@@ -489,6 +585,13 @@ static aparse_error_t aparse__process_integer(
             default:  base = 8;          break;
         }
     }
+
+    /*
+     * Re-validate after the base prefix: strtoull() itself accepts leading
+     * whitespace and signs, so "0x-5" or "0x" must be rejected here.
+     */
+    if(!isalnum((unsigned char)*p))
+        return aparse__value_error(result, arg, carg, APARSE_UERR_INVALID_VALUE);
 
     errno = 0;
     parsed = strtoull(p, &endptr, base);
@@ -593,19 +696,25 @@ static aparse_error_t aparse__process_positional(
     switch(arg->type)
     {
         case APARSE_TYPE_STRING:
+        {
+            size_t len = 0;
+
             if(arg->size == APARSE_STRING_UNBOUNDED)
             {
                 *(const char **)arg->out_val = carg;
                 return APARSE_ERR_OK;
             }
-            if(strlen(carg) > arg->size)
+
+            /* The buffer must hold the string plus its terminating NUL. */
+            len = strlen(carg);
+            if(len >= arg->size)
             {
                 rc = aparse__value_error(result, arg, carg, APARSE_UERR_VALUE_OVERFLOW);
                 break;
             }
-            strncpy((char *)arg->out_val, carg, arg->size);
-            ((char *)arg->out_val)[arg->size - 1] = '\0';
+            memcpy(arg->out_val, carg, len + 1);
             break;
+        }
 
         case APARSE_TYPE_INT:
         case APARSE_TYPE_UINT:
@@ -634,7 +743,7 @@ static aparse_error_t aparse__process_positional(
 
 static APARSE__INLINE size_t aparse__estimate_elem_size(const aparse_argument_t *arg)
 {
-    return arg->type == APARSE_TYPE_STRING && arg->size == 0 ?
+    return arg->type == APARSE_TYPE_STRING && arg->size == APARSE_STRING_UNBOUNDED ?
         sizeof(const char *) : arg->size;
 }
 
@@ -699,8 +808,13 @@ static aparse_error_t aparse__process_option(
     aparse_argument_t arg_copy = {0};
     aparse_error_t err = APARSE_ERR_OK;
 
-    if(!arg || !carg || !config || !scope || !persistent || !result)
+    if(!arg || !carg || !aparse__config_is_valid(config) ||
+       !scope || !persistent || !result)
         return APARSE_ERR_INVALID_ARGUMENT;
+    if(!arg->out_val)
+        return APARSE_ERR_INVALID_DESTINATION;
+    if(arg->action != APARSE_ACTION_STORE && arg->action != APARSE_ACTION_APPEND)
+        return APARSE_ERR_INVALID_SPEC;
 
     nargs_mode = APARSE_NARGS_MODE(arg->nargs);
     nargs_count = APARSE_NARGS_COUNT(arg->nargs);
@@ -709,8 +823,11 @@ static aparse_error_t aparse__process_option(
 
     for(size_t i = persistent->current_idx; i < persistent->argc; i++)
     {
-        const aparse_argument_t *matched_arg =
-            aparse__match_arg(scope, persistent->argv[i], config);
+        const aparse_argument_t *matched_arg = NULL;
+
+        if(!persistent->argv[i])
+            break;
+        matched_arg = aparse__match_arg(scope, persistent->argv[i], config);
         if(matched_arg && !aparse__arg_is_positional(matched_arg))
             break;
         available++;
@@ -719,16 +836,21 @@ static aparse_error_t aparse__process_option(
     switch(nargs_mode)
     {
         case APARSE_NARGS_NONE:
+            result->expected_count = 1;
             if(available == 0)
                 return aparse__value_error(result, arg, NULL, APARSE_UERR_MISSING_VALUE);
             count = 1;
             break;
         case APARSE_NARGS_EXACT:
-            if(!nargs_count || available < nargs_count)
+            if(!nargs_count)
+                return APARSE_ERR_INVALID_SPEC;
+            result->expected_count = nargs_count;
+            if(available < nargs_count)
                 return aparse__value_error(result, arg, NULL, APARSE_UERR_MISSING_VALUE);
             count = nargs_count;
             break;
         case APARSE_NARGS_MINIMUM:
+            result->expected_count = nargs_count;
             if(available < nargs_count)
                 return aparse__value_error(result, arg, NULL, APARSE_UERR_MISSING_VALUE);
             count = available;
@@ -742,9 +864,6 @@ static aparse_error_t aparse__process_option(
             return APARSE_ERR_INVALID_SPEC;
     }
 
-    if(!count)
-        return aparse__value_error(result, arg, NULL, APARSE_UERR_MISSING_VALUE);
-
     elem_size = aparse__estimate_elem_size(arg);
     state = aparse__scope_get_state(scope, arg);
     if(!state)
@@ -753,18 +872,26 @@ static aparse_error_t aparse__process_option(
     if(arg->action == APARSE_ACTION_STORE)
         state->item_idx = 0;
 
-    if(arg->action == APARSE_ACTION_APPEND ||
-       (arg->action == APARSE_ACTION_STORE && APARSE__NARGS_IS_FLEXIBLE(nargs_mode)))
+    /* Flexible options may legitimately receive zero values. */
+    if(count == 0)
+        return APARSE_ERR_OK;
+
+    if(aparse__arg_is_array(arg))
     {
         out_arr = arg->out_val;
+        if(state->item_idx > (size_t)-1 - count)
+            return APARSE_ERR_SIZE_OVERFLOW;
         required_capacity = state->item_idx + count;
         err = aparse__array_reserve(out_arr, elem_size, required_capacity, config);
         if(err != APARSE_ERR_OK)
             return err;
         array_ptr = out_arr->data;
     }
-    else if(arg->action == APARSE_ACTION_STORE)
+    else
         array_ptr = arg->out_val;
+
+    if(!array_ptr)
+        return APARSE_ERR_INVALID_DESTINATION;
 
     arg_copy = *arg;
 
@@ -782,6 +909,10 @@ static aparse_error_t aparse__process_option(
 
     while(count--)
     {
+        if(persistent->current_idx >= persistent->argc ||
+           !persistent->argv[persistent->current_idx])
+            return APARSE_ERR_INTERNAL;
+
         arg_copy.out_val = (uint8_t *)array_ptr + elem_size * state->item_idx++;
         err = aparse__process_positional(
                 &arg_copy, persistent->argv[persistent->current_idx++], result);
@@ -804,13 +935,18 @@ static aparse_error_t aparse__add_string_to_result(
         const char *str,
         const aparse_config_t *config)
 {
-    if(!result || !str)
+    if(!result || !str || !aparse__config_is_valid(config))
         return APARSE_ERR_INVALID_ARGUMENT;
 
     if(result->strings_count >= result->strings_capacity)
     {
         size_t new_capacity = result->strings_capacity ? result->strings_capacity * 2 : 4;
-        const char **new_strings = config->alloc.realloc(
+        const char **new_strings = NULL;
+
+        if(new_capacity > (size_t)-1 / sizeof(*result->strings))
+            return APARSE_ERR_SIZE_OVERFLOW;
+
+        new_strings = config->alloc.realloc(
                 config->alloc.userdata,
                 result->strings,
                 sizeof(*result->strings) * new_capacity);
@@ -824,19 +960,31 @@ static aparse_error_t aparse__add_string_to_result(
     return APARSE_ERR_OK;
 }
 
-static void aparse__apply_default(
-        const aparse_argument_t *arg)
+static void aparse__apply_default(const aparse_argument_t *arg)
 {
-    if(!arg->out_val || !arg->default_val)
+    if(!arg || !arg->out_val || !arg->default_val)
+        return;
+
+    /* Subcommands have no value, and array destinations hold an aparse_array_t. */
+    if(arg->kind == APARSE_ARGUMENT_COMMAND || aparse__arg_is_array(arg))
         return;
 
     switch(arg->type)
     {
         case APARSE_TYPE_STRING:
             if(arg->size == APARSE_STRING_UNBOUNDED)
-                *(void**)arg->out_val = *(void *const *)arg->default_val;
+                *(const char **)arg->out_val = *(const char *const *)arg->default_val;
             else
-                memcpy(arg->out_val, arg->default_val, arg->size);
+            {
+                /* Never read past the end of a shorter default string. */
+                const char *src = (const char *)arg->default_val;
+                size_t n = 0;
+
+                while(n < arg->size - 1 && src[n])
+                    n++;
+                memcpy(arg->out_val, src, n);
+                ((char *)arg->out_val)[n] = '\0';
+            }
             break;
 
         default:
@@ -854,6 +1002,10 @@ static aparse_error_t aparse__parse_recursive(
 {
     aparse_error_t rc = APARSE_ERR_OK;
     aparse__scope_t scope = {0};
+    bool had_unexpected = false;
+
+    if(!state || !result || !aparse__config_is_valid(config))
+        return APARSE_ERR_INVALID_ARGUMENT;
 
     if(state->depth >= APARSE_MAX_DEPTH)
         return APARSE_ERR_TOO_DEEP;
@@ -870,24 +1022,31 @@ static aparse_error_t aparse__parse_recursive(
     while(state->current_idx < state->argc)
     {
         const char *carg = state->argv[state->current_idx++];
-        const aparse_argument_t *matched_arg = aparse__match_arg(&scope, carg, config);
+        const aparse_argument_t *matched_arg = NULL;
+
+        if(!carg)
+            continue;
+
+        matched_arg = aparse__match_arg(&scope, carg, config);
 
         if(!matched_arg)
         {
             aparse_error_t rc2 = APARSE_ERR_OK;
             if(state->depth > 1)
             {
+                /* Let the parent scope have a go at this argument. */
                 state->current_idx--;
                 break;
             }
 
-            rc = APARSE_ERR_USER;
+            had_unexpected = true;
             result->user_error = APARSE_UERR_UNEXPECTED_ARGUMENT;
             rc2 = aparse__add_string_to_result(result, carg, config);
             if(rc2 != APARSE_ERR_OK)
             {
                 APARSE__ERROR("aparse", "failed to add unknown argument to result: %s",
                         aparse_strerror(rc2));
+                rc = rc2;
                 break;
             }
             continue;
@@ -935,6 +1094,10 @@ static aparse_error_t aparse__parse_recursive(
                         rc = APARSE_ERR_INVALID_SPEC;
                         break;
                 }
+
+                /* Mark as seen so defaults don't overwrite the parsed value. */
+                if(rc == APARSE_ERR_OK)
+                    scope.states[matched_arg - args].processed_count++;
                 break;
 
             case APARSE_ARGUMENT_OPTION:
@@ -946,46 +1109,53 @@ static aparse_error_t aparse__parse_recursive(
             case APARSE_ARGUMENT_COMMAND:
             {
                 const aparse_argument_t *subcmd = NULL;
+                aparse_subcommand_node_t *node = NULL;
+                aparse_subcommand_node_t **tail = NULL;
 
-                for(size_t i = 0; i < matched_arg->children_count; i++)
+                if(matched_arg->children)
                 {
-                    if(strcmp(carg, matched_arg->children[i].longopt) == 0)
+                    for(size_t i = 0; i < matched_arg->children_count; i++)
                     {
-                        subcmd = &matched_arg->children[i];
-                        break;
+                        if(matched_arg->children[i].longopt &&
+                           strcmp(carg, matched_arg->children[i].longopt) == 0)
+                        {
+                            subcmd = &matched_arg->children[i];
+                            break;
+                        }
                     }
                 }
 
                 if(!subcmd)
                 {
                     result->user_error = APARSE_UERR_UNKNOWN_COMMAND;
+                    result->arg = matched_arg;
+                    result->value = carg;
                     rc = APARSE_ERR_USER;
                     break;
                 }
+
+                /*
+                 * Register the node before descending so the list is ordered
+                 * from the outermost subcommand to the innermost one.
+                 */
+                node = config->alloc.malloc(config->alloc.userdata, sizeof(*node));
+                if(!node)
+                {
+                    rc = APARSE_ERR_OUT_OF_MEMORY;
+                    break;
+                }
+
+                memset(node, 0, sizeof(*node));
+                node->command = subcmd->children;
+                tail = &result->subcommand_head;
+                while(*tail)
+                    tail = &(*tail)->next;
+                *tail = node;
 
                 rc = aparse__parse_recursive(
                         subcmd->children, subcmd->children_count, config, state, result);
                 if(rc != APARSE_ERR_OK)
                     break;
-
-                {
-                    aparse_subcommand_node_t *node = config->alloc.malloc(
-                            config->alloc.userdata, sizeof(*node));
-                    aparse_subcommand_node_t **tail = NULL;
-
-                    if(!node)
-                    {
-                        rc = APARSE_ERR_OUT_OF_MEMORY;
-                        break;
-                    }
-
-                    memset(node, 0, sizeof(*node));
-                    node->command = subcmd->children;
-                    tail = &result->subcommand_head;
-                    while(*tail)
-                        tail = &(*tail)->next;
-                    *tail = node;
-                }
 
                 scope.states[matched_arg - args].processed_count = 1;
                 break;
@@ -1000,6 +1170,10 @@ static aparse_error_t aparse__parse_recursive(
             break;
     }
 
+    /* A stray argument must not be forgotten just because later ones parsed. */
+    if(rc == APARSE_ERR_OK && had_unexpected)
+        rc = APARSE_ERR_USER;
+
     if(rc == APARSE_ERR_OK)
     {
         for(size_t i = 0; i < args_count; i++)
@@ -1010,26 +1184,40 @@ static aparse_error_t aparse__parse_recursive(
                 continue;
             if(scope.states[i].processed_count > 0)
                 continue;
+            /* A positional with a default value is optional. */
+            if(args[i].kind == APARSE_ARGUMENT_POSITIONAL && args[i].default_val)
+                continue;
 
             rc = APARSE_ERR_USER;
+
+            if(args[i].kind == APARSE_ARGUMENT_COMMAND)
+            {
+                if(result->user_error != APARSE_UERR_MISSING_POSITIONAL)
+                    result->user_error = APARSE_UERR_MISSING_COMMAND;
+                continue;
+            }
+
             result->user_error = APARSE_UERR_MISSING_POSITIONAL;
-            rc2 = aparse__add_string_to_result(result, args[i].longopt, config);
+            rc2 = aparse__add_string_to_result(result, aparse__positional_name(&args[i]), config);
             if(rc2 != APARSE_ERR_OK)
             {
                 APARSE__ERROR("aparse", "failed to add missing positional argument to result: %s",
                         aparse_strerror(rc2));
+                rc = rc2;
                 break;
             }
         }
 
-        for(size_t i = 0; i < args_count; i++)
+        if(rc == APARSE_ERR_OK)
         {
-            if(scope.states[i].processed_count == 0)
-                aparse__apply_default(&args[i]);
+            for(size_t i = 0; i < args_count; i++)
+            {
+                if(scope.states[i].processed_count == 0)
+                    aparse__apply_default(&args[i]);
 
-            if(args[i].action == APARSE_ACTION_APPEND ||
-               APARSE__NARGS_IS_FLEXIBLE(APARSE_NARGS_MODE(args[i].nargs)))
-                ((aparse_array_t *)args[i].out_val)->size = scope.states[i].item_idx;
+                if(aparse__arg_is_array(&args[i]) && args[i].out_val)
+                    ((aparse_array_t *)args[i].out_val)->size = scope.states[i].item_idx;
+            }
         }
     }
 
@@ -1088,7 +1276,8 @@ aparse_error_t aparse_parse_from_argv(
     aparse_error_t rc = APARSE_ERR_OK;
     aparse__persistent_state_t persistent = {0};
 
-    if(argc <= 0 || !argv || !args || !config || !result)
+    if(argc <= 0 || !argv || (!args && args_count > 0) ||
+       !aparse__config_is_valid(config) || !result)
         return APARSE_ERR_INVALID_ARGUMENT;
 
     (void)aparse_log;
@@ -1124,6 +1313,9 @@ aparse_error_t aparse_parse_from_cmdline(
 
 static APARSE__INLINE const char *aparse__infer_metavar(const aparse_argument_t *arg)
 {
+    if(!arg)
+        return "UNKNOWN";
+
     switch(arg->type)
     {
         case APARSE_TYPE_STRING: return "STRING";
@@ -1137,6 +1329,9 @@ static APARSE__INLINE const char *aparse__infer_metavar(const aparse_argument_t 
 
 static APARSE__INLINE const char *aparse__arg_type_string(const aparse_argument_t *arg)
 {
+    if(!arg)
+        return "value";
+
     switch(arg->type)
     {
         case APARSE_TYPE_STRING: return "string";
@@ -1155,6 +1350,9 @@ static APARSE__PRINTF(2, 3) int aparse__fprintf_safe(
 {
     int len = 0;
     va_list va;
+
+    if(!fmt)
+        return 0;
 
     va_start(va, fmt);
     if(!file)
@@ -1216,7 +1414,7 @@ static int aparse__print_argument_label(
     }
     else
     {
-        name = arg->metavar ? arg->metavar : (arg->longopt ? arg->longopt : "");
+        name = aparse__positional_name(arg);
         if(file)
             aparse__fprintf_safe(file, "%s", APARSE__ANSI_ESCAPE(APARSE__COLOR_BOLD_GREEN));
         len += aparse__fprintf_safe(file, "%s", name);
@@ -1279,6 +1477,9 @@ static void aparse__print_wrapped(const char *text, const int start_col, const i
     int col = 0;
     const char *p = text;
 
+    if(!p)
+        return;
+
     while(*p)
     {
         const char *word_start = NULL;
@@ -1335,14 +1536,19 @@ static void aparse__print_wrapped(const char *text, const int start_col, const i
 
 static void aparse__print_default(const aparse_argument_t *arg)
 {
+    if(!arg || !arg->default_val)
+        return;
+
     switch(arg->type)
     {
         case APARSE_TYPE_STRING:
-            fprintf(APARSE__STREAM, "%s",
-                    arg->size == APARSE_STRING_UNBOUNDED ?
-                    *(char * const *)arg->default_val :
-                    (const char *)arg->default_val);
+        {
+            const char *str = arg->size == APARSE_STRING_UNBOUNDED ?
+                *(const char *const *)arg->default_val :
+                (const char *)arg->default_val;
+            fprintf(APARSE__STREAM, "%s", str ? str : "(null)");
             break;
+        }
 
         case APARSE_TYPE_INT:
             switch(arg->size)
@@ -1391,12 +1597,23 @@ static void aparse__print_default(const aparse_argument_t *arg)
 #undef APARSE__PRINT_SIGNED
 #undef APARSE__PRINT_UNSIGNED
 
+static APARSE__INLINE bool aparse__has_printable_default(const aparse_argument_t *arg)
+{
+    return arg && arg->default_val &&
+           (arg->kind == APARSE_ARGUMENT_POSITIONAL ||
+            arg->kind == APARSE_ARGUMENT_OPTION) &&
+           !aparse__arg_is_array(arg);
+}
+
 static void aparse__print_help_text(
         const int label_len,
         const int help_position,
         const aparse_argument_t *arg,
         const int term_width)
 {
+    if(!arg)
+        return;
+
     if(label_len > help_position)
     {
         fputc('\n', APARSE__STREAM);
@@ -1410,7 +1627,7 @@ static void aparse__print_help_text(
             help_position + 1,
             term_width);
 
-    if(arg->default_val)
+    if(aparse__has_printable_default(arg))
     {
         fputs(" (default: ", APARSE__STREAM);
         aparse__print_default(arg);
@@ -1427,14 +1644,10 @@ static void aparse__print_help_text(
 void aparse_print_usage(const aparse_result_t *result)
 {
     char program_name[APARSE__PROGRAM_NAME_MAX] = {0};
-    // int term_width = 0;
-    // int start_col = 0;
-    // int cursor_pos = 0;
     if(!result)
         return;
 
     aparse_get_program_name(program_name, sizeof(program_name));
-    // term_width = aparse__get_terminal_width();
     fprintf(APARSE__STREAM,
             APARSE__COLORIZE(APARSE__COLOR_BOLD_BLUE, "usage:") " "
             APARSE__COLORIZE(APARSE__COLOR_BOLD_MAGENTA, "%s"), program_name);
@@ -1442,16 +1655,14 @@ void aparse_print_usage(const aparse_result_t *result)
     /* Print the command path from the root to the final stack frame. */
     {
         size_t idx = 0;
-        for(;;)
+        while(idx + 1 < result->stack_frame_count)
         {
-            const aparse_argument_t *args = NULL;
-            size_t args_count = 0;
+            const aparse_argument_t *args = result->stack[idx].args;
+            size_t args_count = result->stack[idx].args_count;
             bool found = false;
 
-            if(idx >= result->stack_frame_count - 1)
+            if(!args)
                 break;
-            args = result->stack[idx].args;
-            args_count = result->stack[idx].args_count;
 
             for(size_t i = 0; i < args_count; i++, args++)
             {
@@ -1460,9 +1671,13 @@ void aparse_print_usage(const aparse_result_t *result)
                     continue;
                 if(args->kind == APARSE_ARGUMENT_POSITIONAL)
                 {
-                    fprintf(APARSE__STREAM, " %s", args->metavar ? args->metavar : args->longopt);
+                    /* metavar takes priority over longopt */
+                    fprintf(APARSE__STREAM, " %s", aparse__positional_name(args));
                     continue;
                 }
+
+                if(!args->children)
+                    continue;
 
                 for(size_t j = 0; j < args->children_count; j++)
                 {
@@ -1473,7 +1688,7 @@ void aparse_print_usage(const aparse_result_t *result)
                         found = true;
                         fprintf(APARSE__STREAM, " "
                                 APARSE__COLORIZE(APARSE__COLOR_BOLD_MAGENTA, "%s"),
-                                subcmd->longopt);
+                                APARSE__NULL_TO_EMPTY(subcmd->longopt));
                         break;
                     }
                 }
@@ -1486,21 +1701,25 @@ void aparse_print_usage(const aparse_result_t *result)
     }
 
     /* Print options from the final stack frame. */
+    if(result->arg)
     {
         const aparse_argument_t *arg = result->arg;
         for(size_t i = 0; i < result->arg_count; i++, arg++)
         {
             if(arg->kind == APARSE_ARGUMENT_FLAG)
+            {
+                const char *name = arg->shortopt ? arg->shortopt : arg->longopt;
                 fprintf(APARSE__STREAM, " ["
                         APARSE__COLORIZE(APARSE__COLOR_CYAN, "%s") "]",
-                        arg->shortopt ? arg->shortopt : arg->longopt);
+                        APARSE__NULL_TO_EMPTY(name));
+            }
             else if(arg->kind == APARSE_ARGUMENT_OPTION)
             {
                 const char *name = arg->longopt ? arg->longopt : arg->shortopt;
                 fprintf(APARSE__STREAM, " ["
                         APARSE__COLORIZE(APARSE__COLOR_CYAN, "%s") "%s"
                         APARSE__COLORIZE(APARSE__COLOR_YELLOW, "%s") "]",
-                        name ? name : "", name ? " " : "",
+                        APARSE__NULL_TO_EMPTY(name), name ? " " : "",
                         arg->metavar ? arg->metavar : aparse__infer_metavar(arg));
             }
         }
@@ -1512,8 +1731,9 @@ void aparse_print_usage(const aparse_result_t *result)
                 continue;
             if(arg->kind == APARSE_ARGUMENT_POSITIONAL)
             {
+                /* metavar takes priority over longopt */
                 fprintf(APARSE__STREAM, " " APARSE__COLORIZE(APARSE__COLOR_GREEN, "%s"),
-                        arg->metavar ? arg->metavar : arg->longopt);
+                        aparse__positional_name(arg));
                 continue;
             }
             if(arg->metavar)
@@ -1530,7 +1750,7 @@ void aparse_print_usage(const aparse_result_t *result)
             {
                 if(j > 0)
                     fputs(", ", APARSE__STREAM);
-                fputs(arg->children[j].longopt, APARSE__STREAM);
+                fputs(APARSE__NULL_TO_EMPTY(arg->children[j].longopt), APARSE__STREAM);
             }
             fputs("} ..." APARSE__ANSI_ESCAPE(APARSE__COLOR_DEFAULT), APARSE__STREAM);
         }
@@ -1548,25 +1768,37 @@ void aparse_print_error(const aparse_result_t *result)
     switch(result->user_error)
     {
         case APARSE_UERR_MISSING_VALUE:
-            APARSE__ERROR(program_name, "option '%s' expected %zu argument.",
-                    result->arg->longopt ? result->arg->longopt : result->arg->shortopt,
-                    result->expected_count);
+            APARSE__ERROR(program_name, "option '%s' expected %zu value%s.",
+                    aparse__arg_display_name(result->arg),
+                    result->expected_count,
+                    result->expected_count == 1 ? "" : "s");
             break;
         case APARSE_UERR_INVALID_VALUE:
             APARSE__ERROR(program_name, "invalid %s '%s'",
-                    aparse__arg_type_string(result->arg), result->value);
+                    aparse__arg_type_string(result->arg),
+                    APARSE__NULL_TO_EMPTY(result->value));
             break;
         case APARSE_UERR_VALUE_OVERFLOW:
             APARSE__ERROR(program_name, "value '%s' is too large for argument '%s'",
-                    result->value, result->arg->longopt);
+                    APARSE__NULL_TO_EMPTY(result->value),
+                    aparse__arg_display_name(result->arg));
             break;
         case APARSE_UERR_VALUE_UNDERFLOW:
             APARSE__ERROR(program_name, "value '%s' underflows argument '%s'",
-                    result->value, result->arg->longopt);
+                    APARSE__NULL_TO_EMPTY(result->value),
+                    aparse__arg_display_name(result->arg));
             break;
         case APARSE_UERR_VERIFICATION:
             APARSE__ERROR(program_name, "invalid value '%s' for '%s': %s",
-                    result->value, result->arg->longopt, result->verification_error);
+                    APARSE__NULL_TO_EMPTY(result->value),
+                    aparse__arg_display_name(result->arg),
+                    APARSE__NULL_TO_EMPTY(result->verification_error));
+            break;
+        case APARSE_UERR_UNKNOWN_COMMAND:
+            if(result->value)
+                APARSE__ERROR(program_name, "unrecognized subcommand '%s'", result->value);
+            else
+                APARSE__ERROR(program_name, "%s", aparse_user_strerror(result->user_error));
             break;
         case APARSE_UERR_UNEXPECTED_ARGUMENT:
             fprintf(APARSE__STREAM, "%s: " APARSE__ERROR_LABEL ": unrecognized argument: ",
@@ -1575,7 +1807,7 @@ void aparse_print_error(const aparse_result_t *result)
             {
                 if(i > 0)
                     fprintf(APARSE__STREAM, ", ");
-                fprintf(APARSE__STREAM, "%s", result->strings[i]);
+                fprintf(APARSE__STREAM, "%s", APARSE__NULL_TO_EMPTY(result->strings[i]));
             }
             fputc('\n', APARSE__STREAM);
             break;
@@ -1586,7 +1818,7 @@ void aparse_print_error(const aparse_result_t *result)
             {
                 if(i > 0)
                     fprintf(APARSE__STREAM, ", ");
-                fprintf(APARSE__STREAM, "%s", result->strings[i]);
+                fprintf(APARSE__STREAM, "%s", APARSE__NULL_TO_EMPTY(result->strings[i]));
             }
             fputc('\n', APARSE__STREAM);
             break;
@@ -1603,7 +1835,7 @@ void aparse_print_help(const aparse_result_t *result)
     size_t args_count = 0;
     int label_max_len = 0;
 
-    if(!result)
+    if(!result || !result->arg)
         return;
     args_count = result->arg_count;
     term_width = aparse__get_terminal_width();
@@ -1631,6 +1863,8 @@ void aparse_print_help(const aparse_result_t *result)
         args = result->arg;
         for(size_t i = 0; i < args_count; i++, args++)
         {
+            int label_len = 0;
+
             if(args->kind != APARSE_ARGUMENT_POSITIONAL &&
                args->kind != APARSE_ARGUMENT_COMMAND)
                 continue;
@@ -1638,7 +1872,7 @@ void aparse_print_help(const aparse_result_t *result)
                 fputs(APARSE__COLORIZE(APARSE__COLOR_BOLD_BLUE, "positional arguments:") "\n",
                         APARSE__STREAM);
 
-            int label_len = aparse__print_argument_label(APARSE__STREAM, 1, args);
+            label_len = aparse__print_argument_label(APARSE__STREAM, 1, args);
             aparse__print_help_text(label_len, label_max_len, args, term_width);
 
             if(args->kind == APARSE_ARGUMENT_COMMAND && args->children && args->children_count > 0)
@@ -1662,6 +1896,8 @@ void aparse_print_help(const aparse_result_t *result)
         args = result->arg;
         for(size_t i = 0; i < args_count; i++, args++)
         {
+            int label_len = 0;
+
             if(args->kind == APARSE_ARGUMENT_POSITIONAL ||
                args->kind == APARSE_ARGUMENT_COMMAND)
                 continue;
@@ -1669,7 +1905,7 @@ void aparse_print_help(const aparse_result_t *result)
                 fputs(APARSE__COLORIZE(APARSE__COLOR_BOLD_BLUE, "options:") "\n",
                         APARSE__STREAM);
 
-            int label_len = aparse__print_argument_label(APARSE__STREAM, 1, args);
+            label_len = aparse__print_argument_label(APARSE__STREAM, 1, args);
             aparse__print_help_text(label_len, label_max_len, args, term_width);
             printed = true;
         }
@@ -1682,16 +1918,17 @@ void aparse_print_help(const aparse_result_t *result)
 
 void aparse_destroy_array(aparse_array_t *array, const aparse_config_t *config)
 {
-    if(!array || !config)
+    if(!array || !config || !config->alloc.free)
         return;
-    config->alloc.free(config->alloc.userdata, array->data);
+    if(array->data)
+        config->alloc.free(config->alloc.userdata, array->data);
     memset(array, 0, sizeof(*array));
 }
 
 void aparse_destroy_result(aparse_result_t *result, const aparse_config_t *config)
 {
     aparse_subcommand_node_t *head = NULL;
-    if(!result)
+    if(!result || !config || !config->alloc.free)
         return;
 
     head = result->subcommand_head;
@@ -1701,6 +1938,7 @@ void aparse_destroy_result(aparse_result_t *result, const aparse_config_t *confi
         config->alloc.free(config->alloc.userdata, head);
         head = next;
     }
-    config->alloc.free(config->alloc.userdata, result->strings);
+    if(result->strings)
+        config->alloc.free(config->alloc.userdata, result->strings);
     memset(result, 0, sizeof(*result));
 }

@@ -487,7 +487,7 @@ int main(int argc, char **argv)
         {
             .kind = APARSE_ARGUMENT_COMMAND,
             .longopt = "command",
-            .metavar = "COMMAND",
+            // .metavar = "COMMAND",
             .children = commands,
             .children_count = ARRSZ(commands)
             /* required=True subparsers are represented by the command
