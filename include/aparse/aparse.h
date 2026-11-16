@@ -1,6 +1,7 @@
 #ifndef APARSE_H
 #define APARSE_H
 
+#include <limits.h>
 #include <stddef.h>
 
 /* =========================================================================
@@ -10,7 +11,7 @@
 #define APARSE_MAX_DEPTH          8
 #define APARSE_STRING_UNBOUNDED   0
 
-#define APARSE__NARGS_SHIFT       (sizeof(size_t) * 8 - 2)
+#define APARSE__NARGS_SHIFT       (sizeof(size_t) * CHAR_BIT - 2)
 
 #define APARSE_NARGS_MODE_MASK    ((size_t)0x3 << APARSE__NARGS_SHIFT)
 #define APARSE_NARGS_NONE         0
@@ -21,12 +22,13 @@
 #define APARSE_NARGS_MODE(n)      (((n) & APARSE_NARGS_MODE_MASK) >> APARSE__NARGS_SHIFT)
 #define APARSE_NARGS_COUNT(n)     ((n) & ~APARSE_NARGS_MODE_MASK)
 
-#define APARSE__STATIC_ASSERT(c, m) \
-    ((void)sizeof(char[(c) ? 1 : -1]), (m))
+/* Integer-constant-expression assertion for static initializers. */
+#define APARSE__STATIC_ASSERT_EXPR(c) \
+    (0 * sizeof(char[(c) ? 1 : -1]))
 
 #define APARSE_NARGS(m, v) \
-    (APARSE__STATIC_ASSERT((m) <= APARSE_NARGS_MAXIMUM, "APARSE_NARGS: invalid mode"), \
-     APARSE__STATIC_ASSERT((v) <= ~APARSE_NARGS_MODE_MASK, "APARSE_NARGS: value exceeds available bits"), \
+    (APARSE__STATIC_ASSERT_EXPR((m) <= APARSE_NARGS_MAXIMUM) + \
+     APARSE__STATIC_ASSERT_EXPR((v) <= ~APARSE_NARGS_MODE_MASK) + \
      (((size_t)(m) << APARSE__NARGS_SHIFT) | (size_t)(v)))
 
 #define APARSE_PTR(type, value) (type[1]){(value)}
@@ -74,7 +76,8 @@ typedef enum
     APARSE_TYPE_INT,
     APARSE_TYPE_UINT,
     APARSE_TYPE_FLOAT,
-    APARSE_TYPE_DOUBLE
+    APARSE_TYPE_DOUBLE,
+    APARSE_TYPE_BOOL
 } aparse_argument_type_t;
 
 /* How an argument is interpreted on the command line. */
@@ -153,6 +156,160 @@ struct aparse_argument
     const struct aparse_argument *children;
     size_t children_count;
 };
+
+
+/* =========================================================================
+ * EZ API
+ * ========================================================================= */
+
+/*
+ * Convenience initializers for common argument definitions.
+ *
+ * These macros produce aparse_argument_t initializers and can be used in
+ * static const argument arrays. For less common configurations, use a
+ * designated initializer directly or the generic APARSE_EZ_OPTION and
+ * APARSE_EZ_POSITIONAL macros.
+ *
+ * APARSE_EZ_STRING expects a char ** destination for dynamically managed
+ * string storage. Use the generic macros with an explicit size for a fixed
+ * caller-provided buffer.
+ *
+ * APARSE_EZ_COMMAND expects children_ to be an actual array, not a pointer.
+ */
+
+#define APARSE_EZ__NARGS_ONE \
+    APARSE_NARGS(APARSE_NARGS_EXACT, 1)
+
+#define APARSE_EZ_OPTION(type_, action_, nargs_, shortopt_, longopt_, out_val_, size_, help_) \
+    { \
+        .kind = APARSE_ARGUMENT_OPTION, \
+        .type = (type_), \
+        .action = (action_), \
+        .shortopt = (shortopt_), \
+        .longopt = (longopt_), \
+        .help = (help_), \
+        .out_val = (out_val_), \
+        .size = (size_), \
+        .nargs = (nargs_) \
+    }
+
+#define APARSE_EZ_POSITIONAL(type_, action_, nargs_, metavar_, out_val_, size_, help_) \
+    { \
+        .kind = APARSE_ARGUMENT_POSITIONAL, \
+        .type = (type_), \
+        .action = (action_), \
+        .metavar = (metavar_), \
+        .help = (help_), \
+        .out_val = (out_val_), \
+        .size = (size_), \
+        .nargs = (nargs_) \
+    }
+
+#define APARSE_EZ_STRING(shortopt_, longopt_, out_val_, help_) \
+    APARSE_EZ_OPTION( \
+        APARSE_TYPE_STRING, APARSE_ACTION_STORE, APARSE_EZ__NARGS_ONE, \
+        shortopt_, longopt_, out_val_, APARSE_STRING_UNBOUNDED, help_)
+
+#define APARSE_EZ_INT(shortopt_, longopt_, out_val_, help_) \
+    APARSE_EZ_OPTION( \
+        APARSE_TYPE_INT, APARSE_ACTION_STORE, APARSE_EZ__NARGS_ONE, \
+        shortopt_, longopt_, out_val_, sizeof(*(out_val_)), help_)
+
+#define APARSE_EZ_UINT(shortopt_, longopt_, out_val_, help_) \
+    APARSE_EZ_OPTION( \
+        APARSE_TYPE_UINT, APARSE_ACTION_STORE, APARSE_EZ__NARGS_ONE, \
+        shortopt_, longopt_, out_val_, sizeof(*(out_val_)), help_)
+
+#define APARSE_EZ_FLOAT(shortopt_, longopt_, out_val_, help_) \
+    APARSE_EZ_OPTION( \
+        APARSE_TYPE_FLOAT, APARSE_ACTION_STORE, APARSE_EZ__NARGS_ONE, \
+        shortopt_, longopt_, out_val_, sizeof(*(out_val_)), help_)
+
+#define APARSE_EZ_DOUBLE(shortopt_, longopt_, out_val_, help_) \
+    APARSE_EZ_OPTION( \
+        APARSE_TYPE_DOUBLE, APARSE_ACTION_STORE, APARSE_EZ__NARGS_ONE, \
+        shortopt_, longopt_, out_val_, sizeof(*(out_val_)), help_)
+
+#define APARSE_EZ__FLAG(action_, shortopt_, longopt_, out_val_, help_) \
+    { \
+        .kind = APARSE_ARGUMENT_FLAG, \
+        .type = APARSE_TYPE_BOOL, \
+        .action = (action_), \
+        .shortopt = (shortopt_), \
+        .longopt = (longopt_), \
+        .help = (help_), \
+        .out_val = (out_val_), \
+        .size = sizeof(*(out_val_)), \
+        .nargs = APARSE_NARGS_NONE \
+    }
+
+#define APARSE_EZ_FLAG(shortopt_, longopt_, out_val_, help_) \
+    APARSE_EZ__FLAG( \
+        APARSE_ACTION_STORE_TRUE, shortopt_, longopt_, out_val_, help_)
+
+#define APARSE_EZ_FLAG_FALSE(shortopt_, longopt_, out_val_, help_) \
+    APARSE_EZ__FLAG( \
+        APARSE_ACTION_STORE_FALSE, shortopt_, longopt_, out_val_, help_)
+
+#define APARSE_EZ_COUNT(shortopt_, longopt_, out_val_, help_) \
+    { \
+        .kind = APARSE_ARGUMENT_FLAG, \
+        .type = APARSE_TYPE_INT, \
+        .action = APARSE_ACTION_COUNT, \
+        .shortopt = (shortopt_), \
+        .longopt = (longopt_), \
+        .help = (help_), \
+        .out_val = (out_val_), \
+        .size = sizeof(*(out_val_)), \
+        .nargs = APARSE_NARGS_NONE \
+    }
+
+#define APARSE_EZ_COUNT_UINT(shortopt_, longopt_, out_val_, help_) \
+    { \
+        .kind = APARSE_ARGUMENT_FLAG, \
+        .type = APARSE_TYPE_UINT, \
+        .action = APARSE_ACTION_COUNT, \
+        .shortopt = (shortopt_), \
+        .longopt = (longopt_), \
+        .help = (help_), \
+        .out_val = (out_val_), \
+        .size = sizeof(*(out_val_)), \
+        .nargs = APARSE_NARGS_NONE \
+    }
+
+#define APARSE_EZ_POSITIONAL_STRING(metavar_, out_val_, help_) \
+    APARSE_EZ_POSITIONAL( \
+        APARSE_TYPE_STRING, APARSE_ACTION_STORE, APARSE_EZ__NARGS_ONE, \
+        metavar_, out_val_, APARSE_STRING_UNBOUNDED, help_)
+
+#define APARSE_EZ_POSITIONAL_INT(metavar_, out_val_, help_) \
+    APARSE_EZ_POSITIONAL( \
+        APARSE_TYPE_INT, APARSE_ACTION_STORE, APARSE_EZ__NARGS_ONE, \
+        metavar_, out_val_, sizeof(*(out_val_)), help_)
+
+#define APARSE_EZ_POSITIONAL_UINT(metavar_, out_val_, help_) \
+    APARSE_EZ_POSITIONAL( \
+        APARSE_TYPE_UINT, APARSE_ACTION_STORE, APARSE_EZ__NARGS_ONE, \
+        metavar_, out_val_, sizeof(*(out_val_)), help_)
+
+#define APARSE_EZ_POSITIONAL_FLOAT(metavar_, out_val_, help_) \
+    APARSE_EZ_POSITIONAL( \
+        APARSE_TYPE_FLOAT, APARSE_ACTION_STORE, APARSE_EZ__NARGS_ONE, \
+        metavar_, out_val_, sizeof(*(out_val_)), help_)
+
+#define APARSE_EZ_POSITIONAL_DOUBLE(metavar_, out_val_, help_) \
+    APARSE_EZ_POSITIONAL( \
+        APARSE_TYPE_DOUBLE, APARSE_ACTION_STORE, APARSE_EZ__NARGS_ONE, \
+        metavar_, out_val_, sizeof(*(out_val_)), help_)
+
+#define APARSE_EZ_COMMAND(name_, help_, children_) \
+    { \
+        .kind = APARSE_ARGUMENT_COMMAND, \
+        .longopt = (name_), \
+        .help = (help_), \
+        .children = (children_), \
+        .children_count = sizeof(children_) / sizeof((children_)[0]) \
+    }
 
 
 /* =========================================================================
