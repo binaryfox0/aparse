@@ -1131,8 +1131,8 @@ static APARSE__INLINE const char *aparse__infer_metavar(const aparse_argument_t 
         case APARSE_TYPE_UINT: return "UINT";
         case APARSE_TYPE_FLOAT: return "FLOAT";
         case APARSE_TYPE_DOUBLE: return "DOUBLE";
+        default: return "UNKNOWN";
     }
-    return "UNKNOWN";
 }
 
 static APARSE__INLINE const char *aparse__arg_type_string(const aparse_argument_t *arg)
@@ -1144,8 +1144,8 @@ static APARSE__INLINE const char *aparse__arg_type_string(const aparse_argument_
         case APARSE_TYPE_UINT: return "unsigned integer";
         case APARSE_TYPE_FLOAT: return "floating-point number";
         case APARSE_TYPE_DOUBLE: return "double-precision floating-point number";
+        default: return "unknown";
     }
-    return "unknown";
 }
 
 static APARSE__PRINTF(2, 3) int aparse__fprintf_safe(
