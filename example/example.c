@@ -27,7 +27,25 @@ int main(int argc, char **argv)
     bool warning_as_errors = false;
     aparse_array_t definitions = {0};
     aparse_array_t features = {0};
+    uint32_t verbosity = 0;
     
+// #define COMMON_ARGS \
+//     { \
+//         .kind = APARSE_ARGUMENT_FLAG, \
+//         .type = APARSE_TYPE_UINT, \
+//         .size = sizeof(verbosity), \
+//         .longopt = "--verbose", \
+//         .shortopt = "-v", \
+//         .help = "Increase verbosity", \
+//         .default_val = APARSE_PTR(uint32_t, 0) \
+//     }, \
+//     { \
+//         .kind = APARSE_ARGUMENT_FLAG, \
+//         .longopt = "--quiet", \
+//         .shortopt = "-q", \
+//         .help = "Supress output" \
+//     }
+
     const aparse_argument_t build_args[] = 
     {
         {
@@ -47,7 +65,8 @@ int main(int argc, char **argv)
             .metavar = "DIR",
             .out_val = &output,
             .size = APARSE_STRING_UNBOUNDED,
-            .help = "Output directory"
+            .help = "Output directory",
+            .default_val = APARSE_PTR(const char *, "build")
         },
         {
             .kind = APARSE_ARGUMENT_OPTION,
@@ -57,7 +76,8 @@ int main(int argc, char **argv)
             .metavar = "N",
             .size = sizeof(jobs),
             .out_val = &jobs,
-            .help = "Number of parallel jobs"
+            .help = "Number of parallel jobs",
+            .default_val = APARSE_PTR(uint32_t, 1)
         },
         {
             .kind = APARSE_ARGUMENT_OPTION,
@@ -69,7 +89,8 @@ int main(int argc, char **argv)
             .metavar = "LEVEL",
             .out_val = &optimization,
             .size = sizeof(optimization),
-            .help = "Optimization level (0-3)"
+            .help = "Optimization level (0-3)",
+            .default_val = APARSE_PTR(uint32_t, 2)
         },
         {
             .kind = APARSE_ARGUMENT_FLAG,
@@ -132,18 +153,6 @@ int main(int argc, char **argv)
 
     const aparse_argument_t args[] =
     {
-        {
-            .kind = APARSE_ARGUMENT_FLAG,
-            .longopt = "--verbose",
-            .shortopt = "-v",
-            .help = "Increase verbosity"
-        },
-        {
-            .kind = APARSE_ARGUMENT_FLAG,
-            .longopt = "--quiet",
-            .shortopt = "-q",
-            .help = "Supress output"
-        },
         {
             .kind = APARSE_ARGUMENT_OPTION,
             .longopt = "--config",

@@ -29,7 +29,7 @@
      APARSE__STATIC_ASSERT((v) <= ~APARSE_NARGS_MODE_MASK, "APARSE_NARGS: value exceeds available bits"), \
      (((size_t)(m) << APARSE__NARGS_SHIFT) | (size_t)(v)))
 
-#define APARSE_PTR(type, value) ((type[1]){(value)})
+#define APARSE_PTR(type, value) (type[1]){(value)}
 
 
 /* =========================================================================
@@ -89,7 +89,11 @@ typedef enum
 typedef enum
 {
     APARSE_ACTION_STORE = 0,
-    APARSE_ACTION_APPEND
+    APARSE_ACTION_APPEND,
+    APARSE_ACTION_COUNT,
+    /* store_true is the default action of boolean */
+    APARSE_ACTION_STORE_TRUE = APARSE_ACTION_STORE,
+    APARSE_ACTION_STORE_FALSE = 3
 } aparse_action_t;
 
 
