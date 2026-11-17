@@ -360,11 +360,21 @@ int main(int argc, char **argv)
         APARSE_EZ_FLAG("-f", "--force", &force,
                 "Force removal")
     };
-
+    
     const aparse_argument_t network_commands[] = {
-        APARSE_EZ_COMMAND("list", "List network interfaces", network_list_args),
-        APARSE_EZ_COMMAND("add", "Add a network interface", network_add_args),
-        APARSE_EZ_COMMAND("remove", "Remove a network interface", network_remove_args)
+        APARSE_EZ_SUBPARSER("list", "List network interfaces", network_list_args),
+        APARSE_EZ_SUBPARSER("add", "Add a network interface", network_add_args),
+        APARSE_EZ_SUBPARSER("remove", "Remove a network interface", network_remove_args)
+    };
+
+    const aparse_argument_t network_args[] = {
+        {
+            .kind = APARSE_ARGUMENT_SUBPARSERS,
+            .longopt = "command",
+            .metavar = "COMMAND",
+            .children = network_commands,
+            .children_count = ARRSZ(network_commands)
+        }
     };
 
     /* ---------------------------------------------------------------------
@@ -429,9 +439,9 @@ int main(int argc, char **argv)
     };
 
     const aparse_argument_t service_commands[] = {
-        APARSE_EZ_COMMAND("list", "List services", service_list_args),
-        APARSE_EZ_COMMAND("start", "Start a service", service_start_args),
-        APARSE_EZ_COMMAND("stop", "Stop a service", service_stop_args)
+        APARSE_EZ_SUBPARSER("list", "List services", service_list_args),
+        APARSE_EZ_SUBPARSER("start", "Start a service", service_start_args),
+        APARSE_EZ_SUBPARSER("stop", "Stop a service", service_stop_args)
     };
 
     /* ---------------------------------------------------------------------
@@ -439,10 +449,10 @@ int main(int argc, char **argv)
      * --------------------------------------------------------------------- */
 
     const aparse_argument_t commands[] = {
-        APARSE_EZ_COMMAND("build", "Build the project", build_args),
-        APARSE_EZ_COMMAND("clean", "Clean build artifacts", clean_args),
-        APARSE_EZ_COMMAND("network", "Manage network configuration", network_commands),
-        APARSE_EZ_COMMAND("service", "Manage system services", service_commands)
+        APARSE_EZ_SUBPARSER("build", "Build the project", build_args),
+        APARSE_EZ_SUBPARSER("clean", "Clean build artifacts", clean_args),
+        APARSE_EZ_SUBPARSER("network", "Manage network configuration", network_args),
+        APARSE_EZ_SUBPARSER("service", "Manage system services", service_commands)
     };
 
     const aparse_argument_t args[] = {
@@ -484,15 +494,9 @@ int main(int argc, char **argv)
                 "Enable debug mode"),
         APARSE_EZ_FLAG(NULL, "--release", &release,
                 "Enable release mode"),
-        {
-            .kind = APARSE_ARGUMENT_COMMAND,
-            .longopt = "command",
-            // .metavar = "COMMAND",
-            .children = commands,
-            .children_count = ARRSZ(commands)
-            /* required=True subparsers are represented by the command
-             * container / missing-command validation in the parser. */
-        }
+        /* required=True subparsers are represented by the command
+         * container / missing-command validation in the parser. */
+        APARSE_EZ_SUBPARSERS("COMMAND", commands)
     };
 
     aparse_error_t rc;

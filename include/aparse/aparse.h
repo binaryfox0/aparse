@@ -86,7 +86,8 @@ typedef enum
     APARSE_ARGUMENT_POSITIONAL,
     APARSE_ARGUMENT_FLAG,
     APARSE_ARGUMENT_OPTION,
-    APARSE_ARGUMENT_COMMAND
+    APARSE_ARGUMENT_SUBPARSER,
+    APARSE_ARGUMENT_SUBPARSERS
 } aparse_argument_kind_t;
 
 typedef enum
@@ -174,7 +175,7 @@ struct aparse_argument
  * string storage. Use the generic macros with an explicit size for a fixed
  * caller-provided buffer.
  *
- * APARSE_EZ_COMMAND expects children_ to be an actual array, not a pointer.
+ * APARSE_EZ_SUBPARSERS expects children to be an actual array, not a pointer.
  */
 
 #define APARSE_EZ__NARGS_ONE \
@@ -302,13 +303,21 @@ struct aparse_argument
         APARSE_TYPE_DOUBLE, APARSE_ACTION_STORE, APARSE_EZ__NARGS_ONE, \
         metavar_, out_val_, sizeof(*(out_val_)), help_)
 
-#define APARSE_EZ_COMMAND(name_, help_, children_) \
+#define APARSE_EZ_SUBPARSER(name_, help_, children_) \
     { \
-        .kind = APARSE_ARGUMENT_COMMAND, \
+        .kind = APARSE_ARGUMENT_SUBPARSER, \
         .longopt = (name_), \
         .help = (help_), \
         .children = (children_), \
         .children_count = sizeof(children_) / sizeof((children_)[0]) \
+    }
+
+#define APARSE_EZ_SUBPARSERS(metavar_, subparsers_) \
+    { \
+        .kind = APARSE_ARGUMENT_SUBPARSERS, \
+        .metavar = (metavar_), \
+        .children = (subparsers_), \
+        .children_count = sizeof(subparsers_) / sizeof((subparsers_)[0]) \
     }
 
 
@@ -373,7 +382,6 @@ typedef enum
 
     /* Command errors */
     APARSE_UERR_UNKNOWN_COMMAND,
-    APARSE_UERR_MISSING_COMMAND,
 
     APARSE__UERR_COUNT
 } aparse_user_error_t;

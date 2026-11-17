@@ -264,7 +264,6 @@ const char *aparse_user_strerror(const aparse_user_error_t err)
         [APARSE_UERR_UNEXPECTED_ARGUMENT] = "unexpected command-line argument",
         [APARSE_UERR_MISSING_POSITIONAL]  = "required positional argument was not provided",
         [APARSE_UERR_UNKNOWN_COMMAND]     = "unrecognized subcommand",
-        [APARSE_UERR_MISSING_COMMAND]     = "required subcommand was not provided"
     };
 
     if((int)err < 0 || err >= APARSE__UERR_COUNT)
@@ -420,7 +419,7 @@ static APARSE__INLINE bool aparse__arg_is_positional(const aparse_argument_t *ar
 {
     return arg &&
            !aparse__arg_is_special(arg) &&
-           (arg->kind == APARSE_ARGUMENT_COMMAND ||
+           (arg->kind == APARSE_ARGUMENT_SUBPARSERS ||
             arg->kind == APARSE_ARGUMENT_POSITIONAL);
 }
 
@@ -966,7 +965,7 @@ static void aparse__apply_default(const aparse_argument_t *arg)
         return;
 
     /* Subcommands have no value, and array destinations hold an aparse_array_t. */
-    if(arg->kind == APARSE_ARGUMENT_COMMAND || aparse__arg_is_array(arg))
+    if(arg->kind == APARSE_ARGUMENT_SUBPARSERS || aparse__arg_is_array(arg))
         return;
 
     switch(arg->type)
@@ -1106,7 +1105,7 @@ static aparse_error_t aparse__parse_recursive(
                     scope.states[matched_arg - args].processed_count++;
                 break;
 
-            case APARSE_ARGUMENT_COMMAND:
+            case APARSE_ARGUMENT_SUBPARSERS:
             {
                 const aparse_argument_t *subcmd = NULL;
                 aparse_subcommand_node_t *node = NULL;
@@ -1138,7 +1137,8 @@ static aparse_error_t aparse__parse_recursive(
                  * Register the node before descending so the list is ordered
                  * from the outermost subcommand to the innermost one.
                  */
-                node = config->alloc.malloc(config->alloc.userdata, sizeof(*node));
+                node = config->alloc.malloc(
+                        config->alloc.userdata, sizeof(*node));
                 if(!node)
                 {
                     rc = APARSE_ERR_OUT_OF_MEMORY;
@@ -1153,7 +1153,9 @@ static aparse_error_t aparse__parse_recursive(
                 *tail = node;
 
                 rc = aparse__parse_recursive(
-                        subcmd->children, subcmd->children_count, config, state, result);
+                        subcmd->children, 
+                        subcmd->children_count, 
+                        config, state, result);
                 if(rc != APARSE_ERR_OK)
                     break;
 
@@ -1180,7 +1182,7 @@ static aparse_error_t aparse__parse_recursive(
         {
             aparse_error_t rc2 = APARSE_ERR_OK;
             if(args[i].kind != APARSE_ARGUMENT_POSITIONAL &&
-               args[i].kind != APARSE_ARGUMENT_COMMAND)
+               args[i].kind != APARSE_ARGUMENT_SUBPARSERS)
                 continue;
             if(scope.states[i].processed_count > 0)
                 continue;
@@ -1189,19 +1191,14 @@ static aparse_error_t aparse__parse_recursive(
                 continue;
 
             rc = APARSE_ERR_USER;
-
-            if(args[i].kind == APARSE_ARGUMENT_COMMAND)
-            {
-                if(result->user_error != APARSE_UERR_MISSING_POSITIONAL)
-                    result->user_error = APARSE_UERR_MISSING_COMMAND;
-                continue;
-            }
-
             result->user_error = APARSE_UERR_MISSING_POSITIONAL;
-            rc2 = aparse__add_string_to_result(result, aparse__positional_name(&args[i]), config);
+            rc2 = aparse__add_string_to_result(
+                    result, aparse__positional_name(&args[i]), 
+                    config);
             if(rc2 != APARSE_ERR_OK)
             {
-                APARSE__ERROR("aparse", "failed to add missing positional argument to result: %s",
+                APARSE__ERROR("aparse", 
+                        "failed to add missing positional argument to result: %s",
                         aparse_strerror(rc2));
                 rc = rc2;
                 break;
@@ -1667,7 +1664,7 @@ void aparse_print_usage(const aparse_result_t *result)
             for(size_t i = 0; i < args_count; i++, args++)
             {
                 if(args->kind != APARSE_ARGUMENT_POSITIONAL &&
-                   args->kind != APARSE_ARGUMENT_COMMAND)
+                   args->kind != APARSE_ARGUMENT_SUBPARSERS)
                     continue;
                 if(args->kind == APARSE_ARGUMENT_POSITIONAL)
                 {
@@ -1773,46 +1770,68 @@ void aparse_print_error(const aparse_result_t *result)
                     result->expected_count,
                     result->expected_count == 1 ? "" : "s");
             break;
+
         case APARSE_UERR_INVALID_VALUE:
             APARSE__ERROR(program_name, "invalid %s '%s'",
                     aparse__arg_type_string(result->arg),
                     APARSE__NULL_TO_EMPTY(result->value));
             break;
+
         case APARSE_UERR_VALUE_OVERFLOW:
             APARSE__ERROR(program_name, "value '%s' is too large for argument '%s'",
                     APARSE__NULL_TO_EMPTY(result->value),
                     aparse__arg_display_name(result->arg));
             break;
+
         case APARSE_UERR_VALUE_UNDERFLOW:
             APARSE__ERROR(program_name, "value '%s' underflows argument '%s'",
                     APARSE__NULL_TO_EMPTY(result->value),
                     aparse__arg_display_name(result->arg));
             break;
+
         case APARSE_UERR_VERIFICATION:
             APARSE__ERROR(program_name, "invalid value '%s' for '%s': %s",
                     APARSE__NULL_TO_EMPTY(result->value),
                     aparse__arg_display_name(result->arg),
                     APARSE__NULL_TO_EMPTY(result->verification_error));
             break;
+
         case APARSE_UERR_UNKNOWN_COMMAND:
-            if(result->value)
-                APARSE__ERROR(program_name, "unrecognized subcommand '%s'", result->value);
-            else
-                APARSE__ERROR(program_name, "%s", aparse_user_strerror(result->user_error));
+        {
+            const aparse_argument_t *arg = NULL;
+            size_t arg_count = 0;
+            fprintf(APARSE__STREAM, "%s: " 
+                    APARSE__ERROR_LABEL ": invalid choice: '%s' (choose from ",
+                    program_name, APARSE__NULL_TO_EMPTY(result->value));
+            arg = result->arg->children;
+            arg_count = result->arg->children_count;
+            for(size_t i = 0; i < arg_count; i++, arg++)
+            {
+                if(i > 0)
+                    fputs(", ", APARSE__STREAM);
+                fputs(APARSE__NULL_TO_EMPTY(arg->longopt), APARSE__STREAM);   
+            }
+            fputs(")\n", APARSE__STREAM);
             break;
+        }
+
         case APARSE_UERR_UNEXPECTED_ARGUMENT:
-            fprintf(APARSE__STREAM, "%s: " APARSE__ERROR_LABEL ": unrecognized argument: ",
+            fprintf(APARSE__STREAM, "%s: " 
+                    APARSE__ERROR_LABEL ": unrecognized argument: ",
                     program_name);
             for(size_t i = 0; i < result->strings_count; i++)
             {
                 if(i > 0)
                     fprintf(APARSE__STREAM, ", ");
-                fprintf(APARSE__STREAM, "%s", APARSE__NULL_TO_EMPTY(result->strings[i]));
+                fprintf(APARSE__STREAM, "%s", 
+                        APARSE__NULL_TO_EMPTY(result->strings[i]));
             }
             fputc('\n', APARSE__STREAM);
             break;
+
         case APARSE_UERR_MISSING_POSITIONAL:
-            fprintf(APARSE__STREAM, "%s: " APARSE__ERROR_LABEL ": the following arguments are required: ",
+            fprintf(APARSE__STREAM, "%s: " 
+                    APARSE__ERROR_LABEL ": the following arguments are required: ",
                     program_name);
             for(size_t i = 0; i < result->strings_count; i++)
             {
@@ -1822,8 +1841,10 @@ void aparse_print_error(const aparse_result_t *result)
             }
             fputc('\n', APARSE__STREAM);
             break;
+
         default:
-            APARSE__ERROR(program_name, "%s", aparse_user_strerror(result->user_error));
+            APARSE__ERROR(program_name, "%s", 
+                    aparse_user_strerror(result->user_error));
             break;
     }
 }
@@ -1845,7 +1866,7 @@ void aparse_print_help(const aparse_result_t *result)
     {
         int label_len = aparse__print_argument_label(NULL, 1, args);
         label_max_len = APARSE__MAX(label_max_len, label_len);
-        if(args->kind == APARSE_ARGUMENT_COMMAND && args->children && args->children_count > 0)
+        if(args->kind == APARSE_ARGUMENT_SUBPARSERS && args->children && args->children_count > 0)
         {
             for(size_t j = 0; j < args->children_count; j++)
             {
@@ -1866,7 +1887,7 @@ void aparse_print_help(const aparse_result_t *result)
             int label_len = 0;
 
             if(args->kind != APARSE_ARGUMENT_POSITIONAL &&
-               args->kind != APARSE_ARGUMENT_COMMAND)
+               args->kind != APARSE_ARGUMENT_SUBPARSERS)
                 continue;
             if(!printed)
                 fputs(APARSE__COLORIZE(APARSE__COLOR_BOLD_BLUE, "positional arguments:") "\n",
@@ -1875,7 +1896,7 @@ void aparse_print_help(const aparse_result_t *result)
             label_len = aparse__print_argument_label(APARSE__STREAM, 1, args);
             aparse__print_help_text(label_len, label_max_len, args, term_width);
 
-            if(args->kind == APARSE_ARGUMENT_COMMAND && args->children && args->children_count > 0)
+            if(args->kind == APARSE_ARGUMENT_SUBPARSERS && args->children && args->children_count > 0)
             {
                 for(size_t j = 0; j < args->children_count; j++)
                 {
@@ -1899,7 +1920,7 @@ void aparse_print_help(const aparse_result_t *result)
             int label_len = 0;
 
             if(args->kind == APARSE_ARGUMENT_POSITIONAL ||
-               args->kind == APARSE_ARGUMENT_COMMAND)
+               args->kind == APARSE_ARGUMENT_SUBPARSERS)
                 continue;
             if(!printed)
                 fputs(APARSE__COLORIZE(APARSE__COLOR_BOLD_BLUE, "options:") "\n",
