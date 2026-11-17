@@ -418,11 +418,10 @@ static aparse_error_t aparse__process_positional(
         case APARSE_TYPE_STRING:
         {
             size_t len = 0;
-
             if(arg->size == APARSE_STRING_UNBOUNDED)
             {
                 *(const char **)arg->out_val = carg;
-                return APARSE_ERR_OK;
+                break;
             }
 
             /* The buffer must hold the string plus its terminating NUL. */
