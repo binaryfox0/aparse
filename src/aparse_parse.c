@@ -697,7 +697,7 @@ static aparse_error_t aparse__append_subcommand(
         return APARSE_ERR_OUT_OF_MEMORY;
 
     memset(node, 0, sizeof(*node));
-    node->command = subcmd->children;
+    node->command = subcmd;
     while(*tail)
         tail = &(*tail)->next;
     *tail = node;
@@ -903,21 +903,25 @@ static aparse_error_t aparse__parse_recursive(
 
             case APARSE_ARGUMENT_SUBPARSERS:
             {
-                const aparse_argument_t *subcmd = aparse__find_subcommand(matched_arg, carg);
+                const aparse_argument_t *subcmd = 
+                    aparse__find_subcommand(matched_arg, carg);
 
                 if(!subcmd)
                 {
-                    rc = aparse__value_error(result, matched_arg, carg, APARSE_UERR_UNKNOWN_COMMAND);
+                    rc = aparse__value_error(
+                            result, matched_arg, 
+                            carg, APARSE_UERR_UNKNOWN_COMMAND);
                     break;
                 }
 
-                /* Register the node before descending to keep the list ordered. */
-                rc = aparse__append_subcommand(result, subcmd, config);
+                rc = aparse__parse_recursive(
+                        subcmd->children, 
+                        subcmd->children_count,
+                        config, state, result);
                 if(rc != APARSE_ERR_OK)
                     break;
-
-                rc = aparse__parse_recursive(subcmd->children, subcmd->children_count,
-                        config, state, result);
+                
+                rc = aparse__append_subcommand(result, subcmd, config);
                 if(rc != APARSE_ERR_OK)
                     break;
 
@@ -970,7 +974,8 @@ aparse_error_t aparse_parse_from_argv(
     persistent.argv = argv;
     persistent.current_idx = 1;
     memset(result, 0, sizeof(*result));
-    return aparse__parse_recursive(args, args_count, config, &persistent, result);
+    return aparse__parse_recursive(args, args_count, 
+            config, &persistent, result);
 }
 
 aparse_error_t aparse_parse_from_cmdline(
