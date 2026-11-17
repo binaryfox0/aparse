@@ -64,6 +64,9 @@ function(target_add_strict_flags target_name)
 endfunction()
 
 add_library(aparse STATIC 
+    src/aparse_output.c
+    src/aparse_parse.c
+    src/aparse_utils.c
     src/aparse.c)
 
 target_include_directories(aparse PUBLIC include)
