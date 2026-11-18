@@ -985,6 +985,11 @@ static aparse_error_t aparse__parse_recursive(
                             carg, APARSE_UERR_UNKNOWN_COMMAND);
                     break;
                 }
+                
+                rc = aparse__append_subcommand(result, subcmd, config);
+                if(rc != APARSE_ERR_OK)
+                    break;
+
 
                 rc = aparse__parse_recursive(
                         subcmd->children, 
@@ -993,10 +998,6 @@ static aparse_error_t aparse__parse_recursive(
                 if(rc != APARSE_ERR_OK)
                     break;
                 
-                rc = aparse__append_subcommand(result, subcmd, config);
-                if(rc != APARSE_ERR_OK)
-                    break;
-
                 scope.states[matched_arg - args].processed_count = 1;
                 break;
             }
