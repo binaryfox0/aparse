@@ -555,7 +555,6 @@ void aparse_print_usage(const aparse_result_t *result)
             APARSE__COLOR_BOLD_BLUE, "usage: ");
     current_col += aparse__put_colored(APARSE__STREAM, 
             APARSE__COLOR_BOLD_MAGENTA, program_name);
-    current_col += aparse__puts(APARSE__STREAM, " ");
     current_col += aparse__print_command_path(result);
 
     /* Arguments fold back to the column after the program and command path. */
