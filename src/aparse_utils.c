@@ -34,7 +34,7 @@
 /* Print the "<source>: <type>: " prefix shared by all diagnostics. */
 void aparse__log_prefix(
         const char *source, 
-            iconst char *type)
+        const char *type)
 {
     fputs(source ? source : "aparse", APARSE__STREAM);
     fputs(": ", APARSE__STREAM);
