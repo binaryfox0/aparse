@@ -74,6 +74,25 @@ static void print_string_array(const char *label, const aparse_array_t *array)
         printf("  - %s\n", STR_OR_NULL(items[i]));
 }
 
+/* Find a selected command among a node's direct children. */
+static const aparse_subcommand_node_t *find_selected_subcommand(
+        const aparse_subcommand_node_t *parent,
+        const aparse_argument_t *command)
+{
+    const aparse_subcommand_node_t *children = NULL;
+    size_t i = 0;
+
+    if(!parent || !command || !parent->children.data)
+        return NULL;
+
+    children = (const aparse_subcommand_node_t *)parent->children.data;
+    for(i = 0; i < parent->children.size; i++)
+        if(children[i].command == command)
+            return &children[i];
+
+    return NULL;
+}
+
 static void print_help_description(
         const aparse_result_t *result,
         const aparse_argument_t *root_args,
@@ -210,7 +229,6 @@ int main(int argc, char **argv)
         {
             .kind = APARSE_ARGUMENT_OPTION,
             .type = APARSE_TYPE_UINT,
-            .action = APARSE_ACTION_STORE,
             .longopt = "--optimization",
             .metavar = "LEVEL",
             .out_val = &optimization,
@@ -232,7 +250,6 @@ int main(int argc, char **argv)
             .longopt = "--define",
             .metavar = "KEY=VALUE",
             .out_val = &definitions,
-            .nargs = APARSE_NARGS(APARSE_NARGS_EXACT, 1),
             .help = "Add a build definition (repeatable)"
         },
         {
@@ -242,7 +259,6 @@ int main(int argc, char **argv)
             .longopt = "--include",
             .metavar = "DIR",
             .out_val = &include_dirs,
-            .nargs = APARSE_NARGS(APARSE_NARGS_EXACT, 1),
             .help = "Add an include directory (repeatable)"
         },
         {
@@ -362,12 +378,10 @@ int main(int argc, char **argv)
         {
             .kind = APARSE_ARGUMENT_OPTION,
             .type = APARSE_TYPE_STRING,
-            .action = APARSE_ACTION_STORE,
             .longopt = "--format",
             .metavar = "FORMAT",
             .out_val = &service_list_format,
             .size = APARSE_STRING_UNBOUNDED,
-            .nargs = APARSE_NARGS(APARSE_NARGS_EXACT, 1),
             .default_val = APARSE_PTR(char *, "table"),
             .verify = {
                 .verify_fn = verify_string_choice,
@@ -473,7 +487,7 @@ int main(int argc, char **argv)
     aparse_error_t rc;
     aparse_result_t result = {0};
     aparse_config_t config = aparse_default_config;
-    const aparse_subcommand_node_t *selected;
+    const aparse_subcommand_node_t *selected = NULL;
 
     /* argparse action="version". The library reports VERSION; the app prints. */
     config.version.shortopt = NULL;
@@ -525,8 +539,8 @@ int main(int argc, char **argv)
          * current aparse API. --debug and --release are therefore independent.
          */
 
-        selected = result.subcommand_head;
-        if(selected && selected->command == &commands[0])
+        selected = find_selected_subcommand(&result.subcommand_root, &commands[0]);
+        if(selected)
         {
             printf("  command: build\n");
             printf("  source: %s\n", STR_OR_NULL(source));
@@ -540,25 +554,28 @@ int main(int argc, char **argv)
             print_string_array("  include_dirs", &include_dirs);
             print_string_array("  features", &features);
         }
-        else if(selected && selected->command == &commands[1])
+        else if((selected = find_selected_subcommand(
+                        &result.subcommand_root, &commands[1])))
         {
             printf("  command: clean\n");
             printf("  all: %s\n", clean_all ? "true" : "false");
             printf("  dry_run: %s\n", clean_dry_run ? "true" : "false");
         }
-        else if(selected && selected->command == &commands[2])
+        else if((selected = find_selected_subcommand(
+                        &result.subcommand_root, &commands[2])))
         {
-            const aparse_subcommand_node_t *sub = selected->next;
+            const aparse_subcommand_node_t *sub = NULL;
             printf("  command: network\n");
 
-            if(sub && sub->command == &network_commands[0])
+            sub = find_selected_subcommand(selected, &network_commands[0]);
+            if(sub)
             {
                 printf("  network_command: list\n");
                 printf("  all: %s\n", network_all ? "true" : "false");
                 printf("  format: %s\n", STR_OR_NULL(network_format));
                 printf("  limit: %u\n", (unsigned int)network_limit);
             }
-            else if(sub && sub->command == &network_commands[1])
+            else if((sub = find_selected_subcommand(selected, &network_commands[1])))
             {
                 printf("  network_command: add\n");
                 printf("  name: %s\n", STR_OR_NULL(interface_name_add));
@@ -567,32 +584,34 @@ int main(int argc, char **argv)
                 printf("  gateway: %s\n", STR_OR_NULL(gateway));
                 printf("  enabled: %s\n", enabled ? "true" : "false");
             }
-            else if(sub && sub->command == &network_commands[2])
+            else if((sub = find_selected_subcommand(selected, &network_commands[2])))
             {
                 printf("  network_command: remove\n");
                 printf("  name: %s\n", STR_OR_NULL(interface_name_remove));
                 printf("  force: %s\n", force ? "true" : "false");
             }
         }
-        else if(selected && selected->command == &commands[3])
+        else if((selected = find_selected_subcommand(
+                        &result.subcommand_root, &commands[3])))
         {
-            const aparse_subcommand_node_t *sub = selected->next;
+            const aparse_subcommand_node_t *sub = NULL;
             printf("  command: service\n");
 
-            if(sub && sub->command == &service_commands[0])
+            sub = find_selected_subcommand(selected, &service_commands[0]);
+            if(sub)
             {
                 printf("  service_command: list\n");
                 printf("  running: %s\n", service_running ? "true" : "false");
                 printf("  format: %s\n", STR_OR_NULL(service_list_format));
             }
-            else if(sub && sub->command == &service_commands[1])
+            else if((sub = find_selected_subcommand(selected, &service_commands[1])))
             {
                 printf("  service_command: start\n");
                 printf("  name: %s\n", STR_OR_NULL(service_name_start));
                 printf("  timeout: %.2f\n", start_timeout);
                 printf("  wait: %s\n", wait ? "true" : "false");
             }
-            else if(sub && sub->command == &service_commands[2])
+            else if((sub = find_selected_subcommand(selected, &service_commands[2])))
             {
                 printf("  service_command: stop\n");
                 printf("  name: %s\n", STR_OR_NULL(service_name_stop));
@@ -606,5 +625,5 @@ int main(int argc, char **argv)
     aparse_destroy_array(&definitions, &config);
     aparse_destroy_result(&result, &config);
 
-    return rc != APARSE_ERR_OK ? 1 : 0;
+    return rc != APARSE_ERR_OK;
 }

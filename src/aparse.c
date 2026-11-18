@@ -145,22 +145,38 @@ void aparse_destroy_array(
     memset(array, 0, sizeof(*array));
 }
 
-void aparse_destroy_result(
-        aparse_result_t *result, 
+/* Release child arrays recursively, from leaves back to the root. */
+static void aparse__destroy_subcommand_node(
+        aparse_subcommand_node_t *node,
         const aparse_config_t *config)
 {
-    aparse_subcommand_node_t *head = NULL;
+    size_t i = 0;
+    aparse_subcommand_node_t *children = NULL;
 
-    if(!result || !config || !config->alloc.free)
+    if(!node || !config)
         return;
 
-    head = result->subcommand_head;
-    while(head)
-    {
-        aparse_subcommand_node_t *next = head->next;
-        config->alloc.free(config->alloc.userdata, head);
-        head = next;
-    }
-    aparse_destroy_array(&result->strings, config);
+    children = node->children.data;
+    for(i = 0; children && i < node->children.size; i++)
+        aparse__destroy_subcommand_node(&children[i], config);
+
+    aparse_destroy_array(&node->children, config);
+}
+
+void aparse_destroy_result(
+        aparse_result_t *result,
+        const aparse_config_t *config)
+{
+    const aparse_config_t *allocator = NULL;
+
+    if(!result)
+        return;
+
+    allocator = config ? config : &aparse_default_config;
+    if(!allocator->alloc.free)
+        return;
+
+    aparse__destroy_subcommand_node(&result->subcommand_root, allocator);
+    aparse_destroy_array(&result->strings, allocator);
     memset(result, 0, sizeof(*result));
 }

@@ -492,20 +492,20 @@ typedef enum
  * ========================================================================= */
 
 /*
- * Represents the selected subcommand hierarchy.
+ * A selected subcommand and its selected descendants.
  *
- * Each node represents a selected command. Its subcommand points to the
- * next selected command, if any.
+ * command points to the subcommand's argument definition.
+ * children.data stores an array of aparse_subcommand_node_t values (not
+ * pointers). The root node in aparse_result_t has command == NULL and stores
+ * the selected top-level subcommands in children.
  *
- * command points to the corresponding argument definition.
- *
- * The result tree is owned by aparse_result_t and must not be freed
+ * The complete tree is owned by aparse_result_t and must not be freed
  * separately.
  */
 typedef struct aparse_subcommand_node
 {
-    struct aparse_subcommand_node *next;
     const aparse_argument_t *command;
+    aparse_array_t children; /* aparse_subcommand_node_t[] */
 } aparse_subcommand_node_t;
 
 typedef struct
@@ -563,7 +563,7 @@ typedef struct
     const char *value;
 
     /* Subcommands */
-    aparse_subcommand_node_t *subcommand_head;
+    aparse_subcommand_node_t subcommand_root;
 } aparse_result_t;
 
 #ifdef __cplusplus
@@ -679,8 +679,11 @@ void aparse_destroy_array(
         const aparse_config_t *config);
 
 /*
- * Releases all memory owned by the result.
+ * Releases all memory owned by the result, including every nested
+ * subcommand node and its child array.
  *
+ * Pass the same allocator configuration used to parse the result. NULL uses
+ * aparse_default_config and is valid when the default allocator was used.
  * Must be called once for every initialized result.
  */
 void aparse_destroy_result(

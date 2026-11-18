@@ -82,7 +82,7 @@ static const aparse_argument_t *aparse__find_subcommand(
 
 static aparse_error_t aparse__scope_create(
         const aparse_argument_t *args,
-        size_t args_count,
+        const size_t args_count,
         const aparse_config_t *config,
         aparse__scope_t *out_scope)
 {
@@ -724,26 +724,29 @@ static aparse_error_t aparse__process_option(
     return APARSE_ERR_OK;
 }
 
-/* Append a subcommand node, keeping the list outermost-to-innermost. */
+/* Append a child by value and return its address for recursive parsing. */
 static aparse_error_t aparse__append_subcommand(
-        aparse_result_t *result,
+        aparse_subcommand_node_t *parent,
         const aparse_argument_t *subcmd,
-        const aparse_config_t *config)
+        const aparse_config_t *config,
+        aparse_subcommand_node_t **out_node)
 {
-    aparse_subcommand_node_t *node = NULL;
-    aparse_subcommand_node_t **tail = &result->subcommand_head;
+    aparse_subcommand_node_t child = {0};
+    aparse_subcommand_node_t *children = NULL;
+    aparse_error_t rc = APARSE_ERR_OK;
 
-    node = config->alloc.malloc(
-            config->alloc.userdata, sizeof(*node));
-    if(!node)
-        return APARSE_ERR_OUT_OF_MEMORY;
+    if(!parent || !subcmd || !config || !out_node)
+        return APARSE_ERR_INVALID_ARGUMENT;
 
-    memset(node, 0, sizeof(*node));
-    node->command = subcmd;
-    while(*tail)
-        tail = &(*tail)->next;
-    *tail = node;
+    *out_node = NULL;
+    child.command = subcmd;
+    rc = aparse__array_append(
+            &parent->children, sizeof(child), &child, config);
+    if(rc != APARSE_ERR_OK)
+        return rc;
 
+    children = parent->children.data;
+    *out_node = &children[parent->children.size - 1];
     return APARSE_ERR_OK;
 }
 
@@ -794,7 +797,6 @@ static aparse_error_t aparse__check_required(
         aparse_result_t *result)
 {
     bool missing = false;
-
     for(size_t i = 0; i < args_count; i++)
     {
         aparse_error_t rc = APARSE_ERR_OK;
@@ -845,6 +847,7 @@ static void aparse__finalize_scope(
 static aparse_error_t aparse__parse_recursive(
         const aparse_argument_t *args,
         const size_t args_count,
+        aparse_subcommand_node_t *node,
         const aparse_config_t *config,
         aparse__persistent_state_t *state,
         aparse_result_t *result)
@@ -853,7 +856,7 @@ static aparse_error_t aparse__parse_recursive(
     aparse__scope_t scope = {0};
     bool had_unexpected = false;
 
-    if(!state || !result || !aparse__config_is_valid(config))
+    if(!node || !state || !result || !aparse__config_is_valid(config))
         return APARSE_ERR_INVALID_ARGUMENT;
     if(state->depth >= APARSE_MAX_DEPTH)
         return APARSE_ERR_TOO_DEEP;
@@ -961,29 +964,30 @@ static aparse_error_t aparse__parse_recursive(
 
             case APARSE_ARGUMENT_SUBPARSERS:
             {
-                const aparse_argument_t *subcmd = 
+                const aparse_argument_t *subcmd =
                     aparse__find_subcommand(matched_arg, carg);
+                aparse_subcommand_node_t *child_node = NULL;
 
                 if(!subcmd)
                 {
                     rc = aparse__value_error(
-                            result, matched_arg, 
+                            result, matched_arg,
                             carg, APARSE_UERR_UNKNOWN_COMMAND);
                     break;
                 }
-                
-                rc = aparse__append_subcommand(result, subcmd, config);
+
+                rc = aparse__append_subcommand(
+                        node, subcmd, config, &child_node);
                 if(rc != APARSE_ERR_OK)
                     break;
-
 
                 rc = aparse__parse_recursive(
-                        subcmd->children, 
+                        subcmd->children,
                         subcmd->children_count,
-                        config, state, result);
+                        child_node, config, state, result);
                 if(rc != APARSE_ERR_OK)
                     break;
-                
+
                 scope.states[matched_arg - args].processed_count = 1;
                 break;
             }
@@ -1035,7 +1039,7 @@ aparse_error_t aparse_parse_from_argv(
     persistent.current_idx = 1;
     memset(result, 0, sizeof(*result));
     return aparse__parse_recursive(args, args_count, 
-            config, &persistent, result);
+            &result->subcommand_root, config, &persistent, result);
 }
 
 aparse_error_t aparse_parse_from_cmdline(
