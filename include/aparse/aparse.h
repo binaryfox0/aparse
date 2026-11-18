@@ -556,10 +556,7 @@ typedef struct
     aparse_stack_frame_t stack[APARSE_MAX_DEPTH];
     size_t stack_frame_count;
 
-    /* Parsed strings */
-    const char **strings;
-    size_t strings_count;
-    size_t strings_capacity;
+    aparse_array_t strings;
 
     /* Parsed value */
     const char *value;

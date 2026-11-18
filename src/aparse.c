@@ -134,7 +134,9 @@ const char *aparse_user_strerror(const aparse_user_error_t err)
 /* MARK: Cleanup API                                                         */
 /* ========================================================================= */
 
-void aparse_destroy_array(aparse_array_t *array, const aparse_config_t *config)
+void aparse_destroy_array(
+        aparse_array_t *array, 
+        const aparse_config_t *config)
 {
     if(!array || !config || !config->alloc.free)
         return;
@@ -143,7 +145,9 @@ void aparse_destroy_array(aparse_array_t *array, const aparse_config_t *config)
     memset(array, 0, sizeof(*array));
 }
 
-void aparse_destroy_result(aparse_result_t *result, const aparse_config_t *config)
+void aparse_destroy_result(
+        aparse_result_t *result, 
+        const aparse_config_t *config)
 {
     aparse_subcommand_node_t *head = NULL;
 
@@ -157,7 +161,6 @@ void aparse_destroy_result(aparse_result_t *result, const aparse_config_t *confi
         config->alloc.free(config->alloc.userdata, head);
         head = next;
     }
-    if(result->strings)
-        config->alloc.free(config->alloc.userdata, result->strings);
+    aparse_destroy_array(&result->strings, config);
     memset(result, 0, sizeof(*result));
 }

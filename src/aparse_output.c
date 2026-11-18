@@ -571,14 +571,14 @@ void aparse_print_usage(const aparse_result_t *result)
 /* ========================================================================= */
 
 static void aparse__print_string_list(
-        const char *const *strings, 
-        const size_t count)
+        const aparse_array_t *strings)
 {
-    for(size_t i = 0; i < count; i++)
+    for(size_t i = 0; i < strings->size; i++)
     {
         if(i > 0)
             fputs(", ", APARSE__STREAM);
-        fputs(APARSE__NULL_TO_EMPTY(strings[i]), APARSE__STREAM);
+        fputs(APARSE__NULL_TO_EMPTY(((const char**)strings->data)[i]), 
+                APARSE__STREAM);
     }
 }
 
@@ -651,16 +651,14 @@ void aparse_print_error(
         case APARSE_UERR_UNEXPECTED_ARGUMENT:
             aparse__log_prefix(program_name, APARSE__ERROR_LABEL);
             fputs("unrecognized argument: ", APARSE__STREAM);
-            aparse__print_string_list(
-                    result->strings, result->strings_count);
+            aparse__print_string_list(&result->strings);
             fputc('\n', APARSE__STREAM);
             break;
 
         case APARSE_UERR_MISSING_POSITIONAL:
             aparse__log_prefix(program_name, APARSE__ERROR_LABEL);
             fputs("the following arguments are required: ", APARSE__STREAM);
-            aparse__print_string_list(
-                    result->strings, result->strings_count);
+            aparse__print_string_list(&result->strings);
             fputc('\n', APARSE__STREAM);
             break;
 

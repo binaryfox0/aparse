@@ -237,7 +237,6 @@ int main(int argc, char **argv)
             .longopt = "--define",
             .metavar = "KEY=VALUE",
             .out_val = &definitions,
-            .size = sizeof(char *),
             .nargs = APARSE_NARGS(APARSE_NARGS_EXACT, 1),
             .help = "Add a build definition (repeatable)"
         },
@@ -248,7 +247,6 @@ int main(int argc, char **argv)
             .longopt = "--include",
             .metavar = "DIR",
             .out_val = &include_dirs,
-            .size = sizeof(char *),
             .nargs = APARSE_NARGS(APARSE_NARGS_EXACT, 1),
             .help = "Add an include directory (repeatable)"
         },
@@ -259,7 +257,6 @@ int main(int argc, char **argv)
             .longopt = "--feature",
             .metavar = "NAME",
             .out_val = &features,
-            .size = sizeof(char *),
             .nargs = APARSE_NARGS(APARSE_NARGS_MINIMUM, 1),
             .help = "Enable one or more features"
         }

@@ -557,6 +557,22 @@ static aparse_error_t aparse__array_reserve(
     return APARSE_ERR_OK;
 }
 
+static aparse_error_t aparse__array_append(
+        aparse_array_t *array,
+        const size_t elem_size,
+        const void *elem,
+        const aparse_config_t *config)
+{
+    aparse_error_t rc = aparse__array_reserve(
+            array, elem_size, array->size + 1, config);
+    if(rc != APARSE_ERR_OK)
+        return rc;
+
+    memcpy((uint8_t*)array->data + elem_size * array->size, elem, elem_size);
+    array->size++;
+    return APARSE_ERR_OK;
+}
+
 /* ========================================================================= */
 /* MARK: Option processing                                                   */
 /* ========================================================================= */
@@ -708,41 +724,6 @@ static aparse_error_t aparse__process_option(
     return APARSE_ERR_OK;
 }
 
-/* ========================================================================= */
-/* MARK: Result bookkeeping                                                  */
-/* ========================================================================= */
-
-static aparse_error_t aparse__add_string_to_result(
-        aparse_result_t *result,
-        const char *str,
-        const aparse_config_t *config)
-{
-    if(!result || !str || !aparse__config_is_valid(config))
-        return APARSE_ERR_INVALID_ARGUMENT;
-
-    if(result->strings_count >= result->strings_capacity)
-    {
-        size_t new_capacity = result->strings_capacity ? 
-            result->strings_capacity * 2 : 4;
-        const char **new_strings = NULL;
-
-        if(new_capacity > (size_t)-1 / sizeof(*result->strings))
-            return APARSE_ERR_SIZE_OVERFLOW;
-
-        new_strings = config->alloc.realloc(
-                config->alloc.userdata, result->strings,
-                sizeof(*result->strings) * new_capacity);
-        if(!new_strings)
-            return APARSE_ERR_OUT_OF_MEMORY;
-
-        result->strings = new_strings;
-        result->strings_capacity = new_capacity;
-    }
-
-    result->strings[result->strings_count++] = str;
-    return APARSE_ERR_OK;
-}
-
 /* Append a subcommand node, keeping the list outermost-to-innermost. */
 static aparse_error_t aparse__append_subcommand(
         aparse_result_t *result,
@@ -817,6 +798,7 @@ static aparse_error_t aparse__check_required(
     for(size_t i = 0; i < args_count; i++)
     {
         aparse_error_t rc = APARSE_ERR_OK;
+        const char *name = NULL;
 
         if(args[i].kind != APARSE_ARGUMENT_POSITIONAL && 
                 args[i].kind != APARSE_ARGUMENT_SUBPARSERS)
@@ -829,8 +811,10 @@ static aparse_error_t aparse__check_required(
 
         missing = true;
         result->user_error = APARSE_UERR_MISSING_POSITIONAL;
-        rc = aparse__add_string_to_result(
-                result, aparse__positional_name(&args[i]), config);
+        name = aparse__positional_name(&args[i]);
+        rc = aparse__array_append(
+                &result->strings, sizeof(const char*),
+                &name, config);
         if(rc != APARSE_ERR_OK)
         {
             APARSE__ERROR("aparse", 
@@ -903,7 +887,9 @@ static aparse_error_t aparse__parse_recursive(
 
             had_unexpected = true;
             result->user_error = APARSE_UERR_UNEXPECTED_ARGUMENT;
-            rc = aparse__add_string_to_result(result, carg, config);
+            rc = aparse__array_append(
+                    &result->strings, sizeof(const char*),
+                    &carg, config);
             if(rc != APARSE_ERR_OK)
             {
                 APARSE__ERROR("aparse", 
