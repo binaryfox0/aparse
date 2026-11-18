@@ -150,17 +150,18 @@ typedef struct
 
 /*
  * Describes an argument or subcommand.
- *
- * Definitions are borrowed by the parser and must remain valid for the
- * duration of parsing.
- *
- * The parser does not modify argument definitions.
- *
- * longopt and shortopt are strings, allowing users to choose their
- * preferred option prefixes, e.g. "--" or "- or "/".
- *
+ * 
+ * Argument definitions are borrowed by the parser and must remain valid
+ * throughout the parsing process. The parser does not modify them.
+ * 
+ * longopt and shortopt specify the option names, including their prefixes.
+ * Users may choose their preferred prefixes, such as "--", "-", or "/".
+ * 
  * ptr points to the destination where the parsed value is stored.
- * size describes the destination storage size.
+ * 
+ * size specifies the destination storage size in bytes. For append actions
+ * or nargs modes minimum and maximum, it instead specifies the size of
+ * each destination element.
  */
 struct aparse_argument
 {

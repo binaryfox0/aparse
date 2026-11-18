@@ -188,26 +188,22 @@ int main(int argc, char **argv)
         {
             .kind = APARSE_ARGUMENT_OPTION,
             .type = APARSE_TYPE_STRING,
-            .action = APARSE_ACTION_STORE,
             .shortopt = "-o",
             .longopt = "--output",
             .metavar = "DIR",
             .out_val = &output,
             .size = APARSE_STRING_UNBOUNDED,
-            .nargs = APARSE_NARGS(APARSE_NARGS_EXACT, 1),
             .default_val = APARSE_PTR(char *, "build"),
             .help = "Output directory"
         },
         {
             .kind = APARSE_ARGUMENT_OPTION,
             .type = APARSE_TYPE_UINT,
-            .action = APARSE_ACTION_STORE,
             .shortopt = "-j",
             .longopt = "--jobs",
             .metavar = "N",
             .out_val = &jobs,
             .size = sizeof(jobs),
-            .nargs = APARSE_NARGS(APARSE_NARGS_EXACT, 1),
             .default_val = APARSE_PTR(uint32_t, 1),
             .help = "Number of parallel jobs"
         },
@@ -219,7 +215,6 @@ int main(int argc, char **argv)
             .metavar = "LEVEL",
             .out_val = &optimization,
             .size = sizeof(optimization),
-            .nargs = APARSE_NARGS(APARSE_NARGS_EXACT, 1),
             .default_val = APARSE_PTR(uint32_t, 2),
             .verify = { .verify_fn = verify_uint_range },
             .help = "Optimization level (0-3)"
@@ -253,7 +248,6 @@ int main(int argc, char **argv)
         {
             .kind = APARSE_ARGUMENT_OPTION,
             .type = APARSE_TYPE_STRING,
-            .action = APARSE_ACTION_STORE,
             .longopt = "--feature",
             .metavar = "NAME",
             .out_val = &features,
@@ -283,12 +277,10 @@ int main(int argc, char **argv)
         {
             .kind = APARSE_ARGUMENT_OPTION,
             .type = APARSE_TYPE_STRING,
-            .action = APARSE_ACTION_STORE,
             .longopt = "--format",
             .metavar = "FORMAT",
             .out_val = &network_format,
             .size = APARSE_STRING_UNBOUNDED,
-            .nargs = APARSE_NARGS(APARSE_NARGS_EXACT, 1),
             .default_val = APARSE_PTR(char *, "table"),
             .verify = {
                 .verify_fn = verify_string_choice,
@@ -299,12 +291,10 @@ int main(int argc, char **argv)
         {
             .kind = APARSE_ARGUMENT_OPTION,
             .type = APARSE_TYPE_UINT,
-            .action = APARSE_ACTION_STORE,
             .longopt = "--limit",
             .metavar = "N",
             .out_val = &network_limit,
             .size = sizeof(network_limit),
-            .nargs = APARSE_NARGS(APARSE_NARGS_EXACT, 1),
             .help = "Maximum number of results (0 means unlimited)"
         }
     };
@@ -315,36 +305,30 @@ int main(int argc, char **argv)
         {
             .kind = APARSE_ARGUMENT_OPTION,
             .type = APARSE_TYPE_STRING,
-            .action = APARSE_ACTION_STORE,
             .longopt = "--address",
             .metavar = "IP",
             .out_val = &address,
             .size = APARSE_STRING_UNBOUNDED,
-            .nargs = APARSE_NARGS(APARSE_NARGS_EXACT, 1),
             .help = "IP address"
             /* argparse required=True is not represented in the current API. */
         },
         {
             .kind = APARSE_ARGUMENT_OPTION,
             .type = APARSE_TYPE_UINT,
-            .action = APARSE_ACTION_STORE,
             .longopt = "--prefix",
             .metavar = "BITS",
             .out_val = &prefix,
             .size = sizeof(prefix),
-            .nargs = APARSE_NARGS(APARSE_NARGS_EXACT, 1),
             .default_val = APARSE_PTR(uint32_t, 24),
             .help = "Network prefix length"
         },
         {
             .kind = APARSE_ARGUMENT_OPTION,
             .type = APARSE_TYPE_STRING,
-            .action = APARSE_ACTION_STORE,
             .longopt = "--gateway",
             .metavar = "IP",
             .out_val = &gateway,
             .size = APARSE_STRING_UNBOUNDED,
-            .nargs = APARSE_NARGS(APARSE_NARGS_EXACT, 1),
             .help = "Default gateway"
         },
         APARSE_EZ_FLAG(NULL, "--enabled", &enabled,
@@ -365,13 +349,7 @@ int main(int argc, char **argv)
     };
 
     const aparse_argument_t network_args[] = {
-        {
-            .kind = APARSE_ARGUMENT_SUBPARSERS,
-            .longopt = "command",
-            .metavar = "COMMAND",
-            .children = network_commands,
-            .children_count = ARRSZ(network_commands)
-        }
+        APARSE_EZ_SUBPARSERS("COMMAND", network_commands)
     };
 
     /* ---------------------------------------------------------------------
@@ -405,12 +383,10 @@ int main(int argc, char **argv)
         {
             .kind = APARSE_ARGUMENT_OPTION,
             .type = APARSE_TYPE_DOUBLE,
-            .action = APARSE_ACTION_STORE,
             .longopt = "--timeout",
             .metavar = "SECONDS",
             .out_val = &start_timeout,
             .size = sizeof(start_timeout),
-            .nargs = APARSE_NARGS(APARSE_NARGS_EXACT, 1),
             .default_val = APARSE_PTR(double, 30.0),
             .help = "Startup timeout"
         },
@@ -424,12 +400,10 @@ int main(int argc, char **argv)
         {
             .kind = APARSE_ARGUMENT_OPTION,
             .type = APARSE_TYPE_DOUBLE,
-            .action = APARSE_ACTION_STORE,
             .longopt = "--timeout",
             .metavar = "SECONDS",
             .out_val = &stop_timeout,
             .size = sizeof(stop_timeout),
-            .nargs = APARSE_NARGS(APARSE_NARGS_EXACT, 1),
             .default_val = APARSE_PTR(double, 30.0),
             .help = "Shutdown timeout"
         }
@@ -440,6 +414,10 @@ int main(int argc, char **argv)
         APARSE_EZ_SUBPARSER("start", "Start a service", service_start_args),
         APARSE_EZ_SUBPARSER("stop", "Stop a service", service_stop_args)
     };
+    
+    const aparse_argument_t service_args[] = {
+        APARSE_EZ_SUBPARSERS("COMMAND", service_commands)
+    };
 
     /* ---------------------------------------------------------------------
      * Root command tree
@@ -449,7 +427,7 @@ int main(int argc, char **argv)
         APARSE_EZ_SUBPARSER("build", "Build the project", build_args),
         APARSE_EZ_SUBPARSER("clean", "Clean build artifacts", clean_args),
         APARSE_EZ_SUBPARSER("network", "Manage network configuration", network_args),
-        APARSE_EZ_SUBPARSER("service", "Manage system services", service_commands)
+        APARSE_EZ_SUBPARSER("service", "Manage system services", service_args)
     };
 
     const aparse_argument_t args[] = {
@@ -460,23 +438,19 @@ int main(int argc, char **argv)
         {
             .kind = APARSE_ARGUMENT_OPTION,
             .type = APARSE_TYPE_STRING,
-            .action = APARSE_ACTION_STORE,
             .longopt = "--config",
             .metavar = "FILE",
             .out_val = &config_file,
             .size = APARSE_STRING_UNBOUNDED,
-            .nargs = APARSE_NARGS(APARSE_NARGS_EXACT, 1),
             .help = "Configuration file"
         },
         {
             .kind = APARSE_ARGUMENT_OPTION,
             .type = APARSE_TYPE_STRING,
-            .action = APARSE_ACTION_STORE,
             .longopt = "--color",
             .metavar = "WHEN",
             .out_val = &color,
             .size = APARSE_STRING_UNBOUNDED,
-            .nargs = APARSE_NARGS(APARSE_NARGS_EXACT, 1),
             .default_val = APARSE_PTR(char *, "auto"),
             .verify = {
                 .verify_fn = verify_string_choice,
