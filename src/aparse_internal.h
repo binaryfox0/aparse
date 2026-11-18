@@ -56,7 +56,8 @@
 #endif
 
 #if defined(__GNUC__) || defined(__clang__)
-#    define APARSE__PRINTF(fmt_index, arg_index) __attribute__((format(printf, fmt_index, arg_index)))
+#    define APARSE__PRINTF(fmt_index, arg_index) \
+        __attribute__((format(printf, fmt_index, arg_index)))
 #    define APARSE__PRINTF_FMT
 #    define APARSE__INLINE inline __attribute__((always_inline))
 #elif defined(_MSC_VER)
@@ -100,7 +101,8 @@
 #define APARSE__COLOR_BOLD_BLUE     "\x1b[1;34m"
 #define APARSE__COLOR_BOLD_MAGENTA  "\x1b[1;35m"
 #define APARSE__COLOR_BOLD_CYAN     "\x1b[1;36m"
-#define APARSE__COLORIZE(color, str) APARSE__ANSI_ESCAPE(color) str APARSE__ANSI_ESCAPE(APARSE__COLOR_DEFAULT)
+#define APARSE__COLORIZE(color, str) \
+    APARSE__ANSI_ESCAPE(color) str APARSE__ANSI_ESCAPE(APARSE__COLOR_DEFAULT)
 
 /* ========================================================================= */
 /* MARK: Internal types                                                      */
@@ -146,9 +148,13 @@ APARSE__PRINTF(3, 4) void aparse__log(
 #define APARSE__INFO_LABEL  APARSE__COLORIZE(APARSE__COLOR_BOLD_BLUE, "info")
 #define APARSE__WARN_LABEL  APARSE__COLORIZE(APARSE__COLOR_BOLD_YELLOW, "warn")
 #define APARSE__ERROR_LABEL APARSE__COLORIZE(APARSE__COLOR_BOLD_RED, "error")
-#define APARSE__DEBUG(source, ...) aparse__log(source, APARSE__DEBUG_LABEL, __VA_ARGS__)
-#define APARSE__INFO(source, ...)  aparse__log(source, APARSE__INFO_LABEL, __VA_ARGS__)
-#define APARSE__WARN(source, ...)  aparse__log(source, APARSE__WARN_LABEL, __VA_ARGS__)
-#define APARSE__ERROR(source, ...) aparse__log(source, APARSE__ERROR_LABEL, __VA_ARGS__)
+#define APARSE__DEBUG(source, ...) \
+    aparse__log(source, APARSE__DEBUG_LABEL, __VA_ARGS__)
+#define APARSE__INFO(source, ...)  \
+    aparse__log(source, APARSE__INFO_LABEL, __VA_ARGS__)
+#define APARSE__WARN(source, ...)  \
+    aparse__log(source, APARSE__WARN_LABEL, __VA_ARGS__)
+#define APARSE__ERROR(source, ...) \
+    aparse__log(source, APARSE__ERROR_LABEL, __VA_ARGS__)
 
 #endif /* APARSE_INTERNAL_H */

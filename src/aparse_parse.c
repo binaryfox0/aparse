@@ -43,16 +43,19 @@ typedef enum
     APARSE__SPECIAL_ACTION_VERSION
 } aparse__special_action_t;
 
-static APARSE__INLINE bool aparse__arg_is_special(const aparse_argument_t *arg)
+static APARSE__INLINE bool aparse__arg_is_special(
+        const aparse_argument_t *arg)
 {
     return arg == APARSE__ARG(APARSE__SPECIAL_ACTION_HELP) ||
            arg == APARSE__ARG(APARSE__SPECIAL_ACTION_VERSION);
 }
 
-static APARSE__INLINE bool aparse__arg_is_positional(const aparse_argument_t *arg)
+static APARSE__INLINE bool aparse__arg_is_positional(
+        const aparse_argument_t *arg)
 {
     return arg && !aparse__arg_is_special(arg) &&
-           (arg->kind == APARSE_ARGUMENT_SUBPARSERS || arg->kind == APARSE_ARGUMENT_POSITIONAL);
+           (arg->kind == APARSE_ARGUMENT_SUBPARSERS || 
+            arg->kind == APARSE_ARGUMENT_POSITIONAL);
 }
 
 /* Find the subcommand of a SUBPARSERS argument called `name`. */
@@ -100,14 +103,16 @@ static aparse_error_t aparse__scope_create(
     }
 
     out_scope->states = config->alloc.malloc(
-            config->alloc.userdata, sizeof(*out_scope->states) * args_count);
+            config->alloc.userdata, 
+            sizeof(*out_scope->states) * args_count);
     if(!out_scope->states)
     {
         memset(out_scope, 0, sizeof(*out_scope));
         return APARSE_ERR_OUT_OF_MEMORY;
     }
 
-    memset(out_scope->states, 0, sizeof(*out_scope->states) * args_count);
+    memset(out_scope->states, 0, 
+            sizeof(*out_scope->states) * args_count);
     return APARSE_ERR_OK;
 }
 
@@ -115,13 +120,17 @@ static APARSE__INLINE aparse__argument_state_t *aparse__scope_get_state(
         aparse__scope_t *scope,
         const aparse_argument_t *arg)
 {
-    if(!scope || !scope->states || !arg || arg < scope->args || arg >= scope->args + scope->args_count)
+    if(!scope || !scope->states || !arg || 
+            arg < scope->args || 
+            arg >= scope->args + scope->args_count)
         return NULL;
 
     return &scope->states[arg - scope->args];
 }
 
-static void aparse__scope_destroy(aparse__scope_t *scope, const aparse_config_t *config)
+static void aparse__scope_destroy(
+        aparse__scope_t *scope, 
+        const aparse_config_t *config)
 {
     if(!scope)
         return;
@@ -144,9 +153,9 @@ static APARSE__INLINE bool aparse__name_matches(
         const bool allow_equal)
 {
     size_t len = 0;
-
     if(!name || !carg)
         return false;
+
     len = strlen(name);
     if(len == 0 || strncmp(name, carg, len) != 0)
         return false;
@@ -173,9 +182,16 @@ static APARSE__INLINE const aparse_argument_t *aparse__match_arg(
 
     if(!scope || !carg || !config)
         return NULL;
-    if(aparse__match_arg_single(config->help.shortopt, config->help.longopt, carg, false))
+    if(aparse__match_arg_single(
+                config->help.shortopt, 
+                config->help.longopt, carg, 
+                false))
         return APARSE__ARG(APARSE__SPECIAL_ACTION_HELP);
-    if(aparse__match_arg_single(config->version.shortopt, config->version.longopt, carg, false))
+
+    if(aparse__match_arg_single(
+                config->version.shortopt, 
+                config->version.longopt, carg, 
+                false))
         return APARSE__ARG(APARSE__SPECIAL_ACTION_VERSION);
 
     for(size_t i = 0; i < scope->args_count; i++)
@@ -190,7 +206,8 @@ static APARSE__INLINE const aparse_argument_t *aparse__match_arg(
             continue;
         }
 
-        if(aparse__match_arg_single(arg->shortopt, arg->longopt, carg,
+        if(aparse__match_arg_single(
+                    arg->shortopt, arg->longopt, carg,
                     arg->kind == APARSE_ARGUMENT_OPTION))
             return arg;
     }
@@ -219,7 +236,9 @@ static aparse_error_t aparse__value_error(
         if(is_unsigned) \
         { \
             if(num > (uint64_t)(umax)) \
-                return aparse__value_error(result, arg, carg, APARSE_UERR_VALUE_OVERFLOW); \
+                return aparse__value_error( \
+                        result, arg, carg, \
+                        APARSE_UERR_VALUE_OVERFLOW); \
             *(utype *)arg->out_val = (utype)num; \
         } \
         else \
@@ -228,13 +247,18 @@ static aparse_error_t aparse__value_error(
             if(is_negative) \
             { \
                 if(num > sign_bit) \
-                    return aparse__value_error(result, arg, carg, APARSE_UERR_VALUE_UNDERFLOW); \
-                *(stype *)arg->out_val = num == sign_bit ? (stype)(smin) : (stype)-(stype)num; \
+                    return aparse__value_error( \
+                            result, arg, carg, \
+                            APARSE_UERR_VALUE_UNDERFLOW); \
+                *(stype *)arg->out_val = num == sign_bit ? \
+                    (stype)(smin) : (stype)-(stype)num; \
             } \
             else \
             { \
                 if(num > (uint64_t)(smax)) \
-                    return aparse__value_error(result, arg, carg, APARSE_UERR_VALUE_OVERFLOW); \
+                    return aparse__value_error( \
+                            result, arg, carg, \
+                            APARSE_UERR_VALUE_OVERFLOW); \
                 *(stype *)arg->out_val = (stype)num; \
             } \
         } \
@@ -297,9 +321,11 @@ static aparse_error_t aparse__process_integer(
         p++;
     }
     if(is_negative && is_unsigned)
-        return aparse__value_error(result, arg, carg, APARSE_UERR_INVALID_VALUE);
+        return aparse__value_error(result, arg, carg, 
+                APARSE_UERR_INVALID_VALUE);
     if(*p == '\0' || *p == '+' || *p == '-' || isspace((unsigned char)*p))
-        return aparse__value_error(result, arg, carg, APARSE_UERR_INVALID_VALUE);
+        return aparse__value_error(result, arg, carg, 
+                APARSE_UERR_INVALID_VALUE);
 
     if(p[0] == '0' && p[1] != '\0')
     {
@@ -317,27 +343,33 @@ static aparse_error_t aparse__process_integer(
      * whitespace and signs, so "0x-5" or "0x" must be rejected here.
      */
     if(!isalnum((unsigned char)*p))
-        return aparse__value_error(result, arg, carg, APARSE_UERR_INVALID_VALUE);
+        return aparse__value_error(result, arg, carg, 
+                APARSE_UERR_INVALID_VALUE);
 
     errno = 0;
     parsed = strtoull(p, &endptr, base);
     if(endptr == p || *endptr != '\0')
-        return aparse__value_error(result, arg, carg, APARSE_UERR_INVALID_VALUE);
+        return aparse__value_error(result, arg, carg, 
+                APARSE_UERR_INVALID_VALUE);
     if(errno == ERANGE || parsed > (unsigned long long)UINT64_MAX)
-        return aparse__value_error(result, arg, carg,
-                is_negative ? APARSE_UERR_VALUE_UNDERFLOW : APARSE_UERR_VALUE_OVERFLOW);
+        return aparse__value_error(result, arg, carg, is_negative ? 
+                APARSE_UERR_VALUE_UNDERFLOW : APARSE_UERR_VALUE_OVERFLOW);
 
     num = (uint64_t)parsed;
     switch(arg->size)
     {
         case sizeof(uint8_t):
-            APARSE__STORE_INTEGER(uint8_t, int8_t, UINT8_MAX, INT8_MIN, INT8_MAX);
+            APARSE__STORE_INTEGER(uint8_t, int8_t, 
+                    UINT8_MAX, INT8_MIN, INT8_MAX);
         case sizeof(uint16_t):
-            APARSE__STORE_INTEGER(uint16_t, int16_t, UINT16_MAX, INT16_MIN, INT16_MAX);
+            APARSE__STORE_INTEGER(uint16_t, int16_t, 
+                    UINT16_MAX, INT16_MIN, INT16_MAX);
         case sizeof(uint32_t):
-            APARSE__STORE_INTEGER(uint32_t, int32_t, UINT32_MAX, INT32_MIN, INT32_MAX);
+            APARSE__STORE_INTEGER(uint32_t, int32_t, 
+                    UINT32_MAX, INT32_MIN, INT32_MAX);
         case sizeof(uint64_t):
-            APARSE__STORE_INTEGER(uint64_t, int64_t, UINT64_MAX, INT64_MIN, INT64_MAX);
+            APARSE__STORE_INTEGER(uint64_t, int64_t, 
+                    UINT64_MAX, INT64_MIN, INT64_MAX);
         default:
             return APARSE_ERR_INVALID_SIZE;
     }
@@ -365,36 +397,44 @@ static aparse_error_t aparse__process_float(
        (arg->type == APARSE_TYPE_DOUBLE && arg->size != sizeof(double)))
         return APARSE_ERR_INVALID_SIZE;
     if(*carg == '\0' || isspace((unsigned char)*carg))
-        return aparse__value_error(result, arg, carg, APARSE_UERR_INVALID_VALUE);
+        return aparse__value_error(result, arg, carg, 
+                APARSE_UERR_INVALID_VALUE);
 
     errno = 0;
     value = strtold(carg, &endptr);
     if(endptr == carg || *endptr != '\0')
-        return aparse__value_error(result, arg, carg, APARSE_UERR_INVALID_VALUE);
+        return aparse__value_error(result, arg, carg, 
+                APARSE_UERR_INVALID_VALUE);
     if(errno == ERANGE)
     {
         if(isinf(value))
-            return aparse__value_error(result, arg, carg, APARSE_UERR_VALUE_OVERFLOW);
+            return aparse__value_error(result, arg, carg, 
+                    APARSE_UERR_VALUE_OVERFLOW);
         if(value == 0.0L)
-            return aparse__value_error(result, arg, carg, APARSE_UERR_VALUE_UNDERFLOW);
+            return aparse__value_error(result, arg, carg, 
+                    APARSE_UERR_VALUE_UNDERFLOW);
     }
 
-    max_value = arg->type == APARSE_TYPE_FLOAT ? (long double)FLT_MAX : (long double)DBL_MAX;
+    max_value = arg->type == APARSE_TYPE_FLOAT ? 
+        (long double)FLT_MAX : (long double)DBL_MAX;
     if(isfinite(value) && fabsl(value) > max_value)
-        return aparse__value_error(result, arg, carg, APARSE_UERR_VALUE_OVERFLOW);
+        return aparse__value_error(result, arg, carg, 
+                APARSE_UERR_VALUE_OVERFLOW);
 
     if(arg->type == APARSE_TYPE_FLOAT)
     {
         float converted = (float)value;
         if(value != 0.0L && converted == 0.0f)
-            return aparse__value_error(result, arg, carg, APARSE_UERR_VALUE_UNDERFLOW);
+            return aparse__value_error(result, arg, carg, 
+                    APARSE_UERR_VALUE_UNDERFLOW);
         *(float *)arg->out_val = converted;
     }
     else
     {
         double converted = (double)value;
         if(value != 0.0L && converted == 0.0)
-            return aparse__value_error(result, arg, carg, APARSE_UERR_VALUE_UNDERFLOW);
+            return aparse__value_error(result, arg, carg, 
+                    APARSE_UERR_VALUE_UNDERFLOW);
         *(double *)arg->out_val = converted;
     }
 
@@ -428,7 +468,8 @@ static aparse_error_t aparse__process_positional(
             len = strlen(carg);
             if(len >= arg->size)
             {
-                rc = aparse__value_error(result, arg, carg, APARSE_UERR_VALUE_OVERFLOW);
+                rc = aparse__value_error(result, arg, carg, 
+                        APARSE_UERR_VALUE_OVERFLOW);
                 break;
             }
             memcpy(arg->out_val, carg, len + 1);
@@ -451,9 +492,11 @@ static aparse_error_t aparse__process_positional(
 
     if(rc == APARSE_ERR_OK && arg->verify.verify_fn)
     {
-        result->verification_error = arg->verify.verify_fn(arg->verify.userdata, arg, arg->out_val);
+        result->verification_error = arg->verify.verify_fn(
+                arg->verify.userdata, arg, arg->out_val);
         if(result->verification_error)
-            return aparse__value_error(result, arg, carg, APARSE_UERR_VERIFICATION);
+            return aparse__value_error(result, arg, carg, 
+                    APARSE_UERR_VERIFICATION);
     }
 
     return rc;
@@ -463,10 +506,12 @@ static aparse_error_t aparse__process_positional(
 /* MARK: Array storage                                                       */
 /* ========================================================================= */
 
-static APARSE__INLINE size_t aparse__estimate_elem_size(const aparse_argument_t *arg)
+static APARSE__INLINE size_t aparse__estimate_elem_size(
+        const aparse_argument_t *arg)
 {
-    return arg->type == APARSE_TYPE_STRING && arg->size == APARSE_STRING_UNBOUNDED ?
-        sizeof(const char *) : arg->size;
+    return arg->type == APARSE_TYPE_STRING && 
+        arg->size == APARSE_STRING_UNBOUNDED ?
+            sizeof(const char *) : arg->size;
 }
 
 static aparse_error_t aparse__array_reserve(
@@ -488,7 +533,8 @@ static aparse_error_t aparse__array_reserve(
     if(size > max_capacity)
         return APARSE_ERR_SIZE_OVERFLOW;
 
-    new_capacity = array->capacity ? array->capacity : APARSE__MIN(4, max_capacity);
+    new_capacity = array->capacity ? 
+        array->capacity : APARSE__MIN(4, max_capacity);
     while(new_capacity < size)
     {
         if(new_capacity > max_capacity / 2)
@@ -499,7 +545,10 @@ static aparse_error_t aparse__array_reserve(
         new_capacity *= 2;
     }
 
-    new_data = config->alloc.realloc(config->alloc.userdata, array->data, new_capacity * elem_size);
+    new_data = config->alloc.realloc(
+            config->alloc.userdata, 
+            array->data, 
+            new_capacity * elem_size);
     if(!new_data)
         return APARSE_ERR_OUT_OF_MEMORY;
 
@@ -533,7 +582,8 @@ static aparse_error_t aparse__process_option(
     aparse_argument_t arg_copy = {0};
     aparse_error_t err = APARSE_ERR_OK;
 
-    if(!arg || !carg || !aparse__config_is_valid(config) || !scope || !persistent || !result)
+    if(!arg || !carg || !aparse__config_is_valid(config) || 
+            !scope || !persistent || !result)
         return APARSE_ERR_INVALID_ARGUMENT;
     if(!arg->out_val)
         return APARSE_ERR_INVALID_DESTINATION;
@@ -563,7 +613,8 @@ static aparse_error_t aparse__process_option(
         case APARSE_NARGS_NONE:
             result->expected_count = 1;
             if(available == 0)
-                return aparse__value_error(result, arg, NULL, APARSE_UERR_MISSING_VALUE);
+                return aparse__value_error(result, arg, NULL, 
+                        APARSE_UERR_MISSING_VALUE);
             count = 1;
             break;
 
@@ -572,14 +623,16 @@ static aparse_error_t aparse__process_option(
                 return APARSE_ERR_INVALID_SPEC;
             result->expected_count = nargs_count;
             if(available < nargs_count)
-                return aparse__value_error(result, arg, NULL, APARSE_UERR_MISSING_VALUE);
+                return aparse__value_error(result, arg, NULL, 
+                        APARSE_UERR_MISSING_VALUE);
             count = nargs_count;
             break;
 
         case APARSE_NARGS_MINIMUM:
             result->expected_count = nargs_count;
             if(available < nargs_count)
-                return aparse__value_error(result, arg, NULL, APARSE_UERR_MISSING_VALUE);
+                return aparse__value_error(result, arg, NULL, 
+                        APARSE_UERR_MISSING_VALUE);
             count = available;
             break;
 
@@ -610,7 +663,8 @@ static aparse_error_t aparse__process_option(
         if(state->item_idx > (size_t)-1 - count)
             return APARSE_ERR_SIZE_OVERFLOW;
         required_capacity = state->item_idx + count;
-        err = aparse__array_reserve(out_arr, elem_size, required_capacity, config);
+        err = aparse__array_reserve(out_arr, elem_size, 
+                required_capacity, config);
         if(err != APARSE_ERR_OK)
             return err;
         array_ptr = out_arr->data;
@@ -636,11 +690,14 @@ static aparse_error_t aparse__process_option(
 
     while(count--)
     {
-        if(persistent->current_idx >= persistent->argc || !persistent->argv[persistent->current_idx])
+        if(persistent->current_idx >= persistent->argc || 
+                !persistent->argv[persistent->current_idx])
             return APARSE_ERR_INTERNAL;
 
         arg_copy.out_val = (uint8_t *)array_ptr + elem_size * state->item_idx++;
-        err = aparse__process_positional(&arg_copy, persistent->argv[persistent->current_idx++], result);
+        err = aparse__process_positional(
+                &arg_copy, persistent->argv[persistent->current_idx++], 
+                result);
         if(err != APARSE_ERR_OK)
         {
             result->arg = result->arg == &arg_copy ? arg : result->arg;
@@ -665,16 +722,19 @@ static aparse_error_t aparse__add_string_to_result(
 
     if(result->strings_count >= result->strings_capacity)
     {
-        size_t new_capacity = result->strings_capacity ? result->strings_capacity * 2 : 4;
+        size_t new_capacity = result->strings_capacity ? 
+            result->strings_capacity * 2 : 4;
         const char **new_strings = NULL;
 
         if(new_capacity > (size_t)-1 / sizeof(*result->strings))
             return APARSE_ERR_SIZE_OVERFLOW;
 
-        new_strings = config->alloc.realloc(config->alloc.userdata, result->strings,
+        new_strings = config->alloc.realloc(
+                config->alloc.userdata, result->strings,
                 sizeof(*result->strings) * new_capacity);
         if(!new_strings)
             return APARSE_ERR_OUT_OF_MEMORY;
+
         result->strings = new_strings;
         result->strings_capacity = new_capacity;
     }
@@ -692,7 +752,8 @@ static aparse_error_t aparse__append_subcommand(
     aparse_subcommand_node_t *node = NULL;
     aparse_subcommand_node_t **tail = &result->subcommand_head;
 
-    node = config->alloc.malloc(config->alloc.userdata, sizeof(*node));
+    node = config->alloc.malloc(
+            config->alloc.userdata, sizeof(*node));
     if(!node)
         return APARSE_ERR_OUT_OF_MEMORY;
 
@@ -722,7 +783,8 @@ static void aparse__apply_default(const aparse_argument_t *arg)
     {
         case APARSE_TYPE_STRING:
             if(arg->size == APARSE_STRING_UNBOUNDED)
-                *(const char **)arg->out_val = *(const char *const *)arg->default_val;
+                *(const char **)arg->out_val = 
+                    *(const char *const *)arg->default_val;
             else
             {
                 /* Never read past the end of a shorter default string. */
@@ -756,7 +818,8 @@ static aparse_error_t aparse__check_required(
     {
         aparse_error_t rc = APARSE_ERR_OK;
 
-        if(args[i].kind != APARSE_ARGUMENT_POSITIONAL && args[i].kind != APARSE_ARGUMENT_SUBPARSERS)
+        if(args[i].kind != APARSE_ARGUMENT_POSITIONAL && 
+                args[i].kind != APARSE_ARGUMENT_SUBPARSERS)
             continue;
         if(scope->states[i].processed_count > 0)
             continue;
@@ -766,10 +829,12 @@ static aparse_error_t aparse__check_required(
 
         missing = true;
         result->user_error = APARSE_UERR_MISSING_POSITIONAL;
-        rc = aparse__add_string_to_result(result, aparse__positional_name(&args[i]), config);
+        rc = aparse__add_string_to_result(
+                result, aparse__positional_name(&args[i]), config);
         if(rc != APARSE_ERR_OK)
         {
-            APARSE__ERROR("aparse", "failed to add missing positional argument to result: %s",
+            APARSE__ERROR("aparse", 
+                    "failed to add missing positional argument to result: %s",
                     aparse_strerror(rc));
             return rc;
         }
@@ -813,7 +878,10 @@ static aparse_error_t aparse__parse_recursive(
     if(rc != APARSE_ERR_OK)
         return rc;
 
-    state->stack[state->depth++] = (aparse_stack_frame_t){ .args = args, .args_count = args_count };
+    state->stack[state->depth++] = (aparse_stack_frame_t){ 
+        .args = args, 
+        .args_count = args_count 
+    };
 
     while(state->current_idx < state->argc)
     {
@@ -838,7 +906,8 @@ static aparse_error_t aparse__parse_recursive(
             rc = aparse__add_string_to_result(result, carg, config);
             if(rc != APARSE_ERR_OK)
             {
-                APARSE__ERROR("aparse", "failed to add unknown argument to result: %s",
+                APARSE__ERROR("aparse", 
+                        "failed to add unknown argument to result: %s",
                         aparse_strerror(rc));
                 break;
             }
@@ -849,11 +918,13 @@ static aparse_error_t aparse__parse_recursive(
         {
             const aparse_stack_frame_t *top = &state->stack[state->depth - 1];
 
-            result->user_error = matched_arg == APARSE__ARG(APARSE__SPECIAL_ACTION_HELP) ?
-                APARSE_UERR_HELP : APARSE_UERR_VERSION;
+            result->user_error = matched_arg == 
+                APARSE__ARG(APARSE__SPECIAL_ACTION_HELP) ?
+                    APARSE_UERR_HELP : APARSE_UERR_VERSION;
             result->arg = top->args;
             result->arg_count = top->args_count;
-            memcpy(result->stack, state->stack, sizeof(result->stack[0]) * state->depth);
+            memcpy(result->stack, state->stack, 
+                    sizeof(result->stack[0]) * state->depth);
             result->stack_frame_count = state->depth;
             rc = APARSE_ERR_USER;
             break;
@@ -896,7 +967,8 @@ static aparse_error_t aparse__parse_recursive(
                 break;
 
             case APARSE_ARGUMENT_OPTION:
-                rc = aparse__process_option(matched_arg, carg, config, &scope, state, result);
+                rc = aparse__process_option(matched_arg, carg, config, 
+                        &scope, state, result);
                 if(rc == APARSE_ERR_OK)
                     scope.states[matched_arg - args].processed_count++;
                 break;
@@ -942,7 +1014,8 @@ static aparse_error_t aparse__parse_recursive(
     if(rc == APARSE_ERR_OK && had_unexpected)
         rc = APARSE_ERR_USER;
     if(rc == APARSE_ERR_OK)
-        rc = aparse__check_required(args, args_count, &scope, config, result);
+        rc = aparse__check_required(args, args_count, 
+                &scope, config, result);
     if(rc == APARSE_ERR_OK)
         aparse__finalize_scope(args, args_count, &scope);
 

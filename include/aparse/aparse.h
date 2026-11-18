@@ -43,7 +43,8 @@
 #define APARSE_NARGS_MINIMUM      2
 #define APARSE_NARGS_MAXIMUM      3
 
-#define APARSE_NARGS_MODE(n)      (((n) & APARSE_NARGS_MODE_MASK) >> APARSE__NARGS_SHIFT)
+#define APARSE_NARGS_MODE(n)      \
+    (((n) & APARSE_NARGS_MODE_MASK) >> APARSE__NARGS_SHIFT)
 #define APARSE_NARGS_COUNT(n)     ((n) & ~APARSE_NARGS_MODE_MASK)
 
 /* Integer-constant-expression assertion for static initializers. */
@@ -205,7 +206,9 @@ struct aparse_argument
 #define APARSE_EZ__NARGS_ONE \
     APARSE_NARGS(APARSE_NARGS_EXACT, 1)
 
-#define APARSE_EZ_OPTION(type_, action_, nargs_, shortopt_, longopt_, out_val_, size_, help_) \
+#define APARSE_EZ_OPTION(type_, action_, nargs_, \
+        shortopt_, longopt_, \
+        out_val_, size_, help_) \
     { \
         .kind = APARSE_ARGUMENT_OPTION, \
         .type = (type_), \
@@ -218,7 +221,8 @@ struct aparse_argument
         .nargs = (nargs_) \
     }
 
-#define APARSE_EZ_POSITIONAL(type_, action_, nargs_, metavar_, out_val_, size_, help_) \
+#define APARSE_EZ_POSITIONAL(type_, action_, nargs_, \
+        metavar_, out_val_, size_, help_) \
     { \
         .kind = APARSE_ARGUMENT_POSITIONAL, \
         .type = (type_), \

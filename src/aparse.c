@@ -35,7 +35,8 @@ static void *aparse__default_malloc(void *userdata, size_t size)
         return malloc(size);
 
     return alloc->malloc ? alloc->malloc(alloc->userdata, size) :
-        (alloc->realloc ? alloc->realloc(alloc->userdata, NULL, size) : malloc(size));
+        (alloc->realloc ? alloc->realloc(alloc->userdata, NULL, size) : 
+         malloc(size));
 }
 
 static void *aparse__default_realloc(void *userdata, void *ptr, size_t size)
@@ -45,13 +46,13 @@ static void *aparse__default_realloc(void *userdata, void *ptr, size_t size)
     if(!alloc)
         return realloc(ptr, size);
 
-    return alloc->realloc ? alloc->realloc(alloc->userdata, ptr, size) : realloc(ptr, size);
+    return alloc->realloc ? alloc->realloc(alloc->userdata, ptr, size) : 
+        realloc(ptr, size);
 }
 
 static void aparse__default_free(void *userdata, void *ptr)
 {
     const aparse_alloc_t *alloc = (const aparse_alloc_t *)userdata;
-
     if(!alloc)
     {
         free(ptr);
