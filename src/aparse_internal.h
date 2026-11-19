@@ -157,4 +157,17 @@ APARSE__PRINTF(3, 4) void aparse__log(
 #define APARSE__ERROR(source, ...) \
     aparse__log(source, APARSE__ERROR_LABEL, __VA_ARGS__)
 
+void *aparse__malloc(
+        const aparse_config_t *config, 
+        const size_t size);
+        
+void *aparse__realloc(
+        const aparse_config_t *config, 
+        void *ptr, 
+        const size_t size);
+
+void aparse__free(
+        const aparse_config_t *config, 
+        void *ptr);
+
 #endif /* APARSE_INTERNAL_H */

@@ -102,9 +102,8 @@ static aparse_error_t aparse__scope_create(
         return APARSE_ERR_SIZE_OVERFLOW;
     }
 
-    out_scope->states = config->alloc.malloc(
-            config->alloc.userdata, 
-            sizeof(*out_scope->states) * args_count);
+    out_scope->states = aparse__malloc(
+            config, sizeof(*out_scope->states) * args_count);
     if(!out_scope->states)
     {
         memset(out_scope, 0, sizeof(*out_scope));
@@ -134,8 +133,8 @@ static void aparse__scope_destroy(
 {
     if(!scope)
         return;
-    if(scope->states && config && config->alloc.free)
-        config->alloc.free(config->alloc.userdata, scope->states);
+
+    aparse__free(config, scope->states);
     memset(scope, 0, sizeof(*scope));
 }
 
@@ -524,7 +523,7 @@ static aparse_error_t aparse__array_reserve(
     size_t max_capacity = 0;
     void *new_data = NULL;
 
-    if(!array || !elem_size || !config || !config->alloc.realloc)
+    if(!array || !elem_size)
         return APARSE_ERR_INVALID_ARGUMENT;
     if(size <= array->capacity)
         return APARSE_ERR_OK;
@@ -545,9 +544,8 @@ static aparse_error_t aparse__array_reserve(
         new_capacity *= 2;
     }
 
-    new_data = config->alloc.realloc(
-            config->alloc.userdata, 
-            array->data, 
+    new_data = aparse__realloc(
+            config, array->data, 
             new_capacity * elem_size);
     if(!new_data)
         return APARSE_ERR_OUT_OF_MEMORY;

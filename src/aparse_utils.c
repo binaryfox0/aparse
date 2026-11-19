@@ -67,8 +67,7 @@ APARSE__PRINTF(3, 4) void aparse__log(
 bool aparse__config_is_valid(
         const aparse_config_t *config)
 {
-    return config && config->alloc.malloc && 
-        config->alloc.realloc && config->alloc.free;
+    return config && config->alloc.realloc && config->alloc.free;
 }
 
 /* ========================================================================= */

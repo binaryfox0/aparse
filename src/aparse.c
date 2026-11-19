@@ -27,42 +27,51 @@
 #include <stdlib.h>
 #include <string.h>
 
+
+void *aparse__malloc(
+        const aparse_config_t *config, 
+        const size_t size)
+{
+    const aparse_alloc_t *alloc = &config->alloc;
+    return alloc->malloc ? alloc->malloc(alloc->userdata, size) :
+        (alloc->realloc ? alloc->realloc(alloc->userdata, NULL, size) : NULL);
+}
+        
+void *aparse__realloc(
+        const aparse_config_t *config, 
+        void *ptr, 
+        const size_t size)
+{
+    const aparse_alloc_t *alloc = &config->alloc;
+    return alloc->realloc ? alloc->realloc(alloc->userdata, ptr, size) : NULL;
+}
+
+void aparse__free(
+        const aparse_config_t *config, 
+        void *ptr)
+{
+    const aparse_alloc_t *alloc = &config->alloc;
+    if(alloc->free)
+        alloc->free(alloc->userdata, ptr);
+}
+
+
 static void *aparse__default_malloc(void *userdata, size_t size)
 {
-    const aparse_alloc_t *alloc = (const aparse_alloc_t *)userdata;
-
-    if(!alloc)
-        return malloc(size);
-
-    return alloc->malloc ? alloc->malloc(alloc->userdata, size) :
-        (alloc->realloc ? alloc->realloc(alloc->userdata, NULL, size) : 
-         malloc(size));
+    (void)userdata;
+    return malloc(size);
 }
 
 static void *aparse__default_realloc(void *userdata, void *ptr, size_t size)
 {
-    const aparse_alloc_t *alloc = (const aparse_alloc_t *)userdata;
-
-    if(!alloc)
-        return realloc(ptr, size);
-
-    return alloc->realloc ? alloc->realloc(alloc->userdata, ptr, size) : 
-        realloc(ptr, size);
+    (void)userdata;
+    return realloc(ptr, size);    
 }
 
 static void aparse__default_free(void *userdata, void *ptr)
 {
-    const aparse_alloc_t *alloc = (const aparse_alloc_t *)userdata;
-    if(!alloc)
-    {
-        free(ptr);
-        return;
-    }
-
-    if(alloc->free)
-        alloc->free(alloc->userdata, ptr);
-    else
-        free(ptr);
+    (void)userdata;
+    free(ptr);
 }
 
 const aparse_config_t aparse_default_config =
@@ -138,10 +147,10 @@ void aparse_destroy_array(
         aparse_array_t *array, 
         const aparse_config_t *config)
 {
-    if(!array || !config || !config->alloc.free)
+    if(!array || !config)
         return;
-    if(array->data)
-        config->alloc.free(config->alloc.userdata, array->data);
+
+    aparse__free(config, array->data);
     memset(array, 0, sizeof(*array));
 }
 
