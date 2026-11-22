@@ -70,15 +70,17 @@ add_library(aparse STATIC
     src/aparse.c)
 
 target_include_directories(aparse PUBLIC include)
+target_compile_definitions(aparse PRIVATE
+    $<$<BOOL:${APARSE_NO_ANSI_ESCAPE}>:APARSE_NO_ANSI_ESCAPE>)
 if(UNIX AND NOT APPLE)
     target_compile_definitions(aparse PRIVATE
-        _POSIX_C_SOURCE=200809L
-    )
+        _POSIX_C_SOURCE=200809L)
 endif()
 set_target_properties(aparse PROPERTIES
     C_STANDARD 11
     C_STANDARD_REQUIRED YES
     C_EXTENSIONS NO)
+
 
 target_add_asan(aparse)
 target_add_strict_flags(aparse)
@@ -86,34 +88,3 @@ target_add_strict_flags(aparse)
 if(APARSE_BUILD_EXAMPLE)
     add_subdirectory(example)
 endif()
-
-# if(APARSE_BUILD_EXAMPLE)
-#     add_executable(example example/example.c)
-#     target_link_libraries(example PRIVATE aparse)
-#     target_add_asan(example)
-#     target_add_strict_flags(example)
-
-#     add_executable(subcmd example/subcmd_example.c)
-#     target_link_libraries(subcmd PRIVATE aparse)
-#     if(UNIX)
-#         target_link_libraries(subcmd PRIVATE m)
-#     endif()
-
-#     target_add_asan(subcmd)
-#     target_add_strict_flags(subcmd)
-
-#     add_executable(help-output tests/help_output.c)
-#     target_link_libraries(help-output PRIVATE aparse)
-#     target_add_asan(help-output)
-#     target_add_strict_flags(help-output)
-
-#     add_executable(edge-cases tests/edge_cases.c)
-#     target_link_libraries(edge-cases PRIVATE aparse)
-#     target_add_asan(edge-cases)
-#     target_add_strict_flags(edge-cases)
-
-#     add_executable(tests tests/tests.c)
-#     target_link_libraries(tests PRIVATE aparse)
-#     target_add_asan(tests)
-#     target_add_strict_flags(tests)
-# endif()
