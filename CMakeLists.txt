@@ -4,7 +4,7 @@ project(aparse LANGUAGES C)
 
 option(APARSE_NO_ANSI_ESCAPE "Disable ANSI escape sequences in aparse's output" OFF)
 option(APARSE_BUILD_WITH_ASAN "Build aparse with AddressSanitizer" OFF)
-option(APARSE_BUILD_EXAMPLE "Build aparse's examples & tests" OFF)
+option(APARSE_BUILD_EXAMPLES "Build aparse's examples & tests" OFF)
 # option(APARSE_LOG_STDOUT "Write aparse log messages to stdout" OFF)
 
 function(target_add_asan target_name)
@@ -85,6 +85,6 @@ set_target_properties(aparse PROPERTIES
 target_add_asan(aparse)
 target_add_strict_flags(aparse)
 
-if(APARSE_BUILD_EXAMPLE)
+if(APARSE_BUILD_EXAMPLES)
     add_subdirectory(example)
 endif()
